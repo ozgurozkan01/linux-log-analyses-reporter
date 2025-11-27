@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Explorer - MiniSIEM</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome İkonları -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .log-table { font-size: 0.9rem; background: white; }
+        .log-table th { background-color: #343a40; color: white; }
+        .filter-card { background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        
+        /* Satır Hover Efekti */
+        .log-row:hover { background-color: #f1f1f1; cursor: default; }
+        
+        /* Severity Renkleri */
+        .badge-critical { background-color: #dc3545; }
+        .badge-warning { background-color: #ffc107; color: black; }
+        .badge-info { background-color: #0dcaf0; color: black; }
+        .badge-safe { background-color: #198754; }
+    </style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container">
+        <a class="navbar-brand" href="/">🛡️ MiniSIEM</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+                <li class="nav-item"><a class="nav-link active" href="/logs">Log Explorer</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+    
+    <!-- Filtreleme Alanı -->
+    <div class="card filter-card mb-4">
+        <div class="card-header bg-white fw-bold">
+            <i class="fas fa-filter text-primary"></i> Gelişmiş Log Filtreleme
+        </div>
+        <div class="card-body">
+            <form action="/logs" method="get" class="row g-3">
+                
+                <!-- Kelime Arama -->
+                <div class="col-md-4">
+                    <label class="form-label">Kelime Ara (Mesaj İçeriği)</label>
+                    <input type="text" name="keyword" class="form-control" 
+                           placeholder="Örn: sudo, failed, root..." 
+                           value="{{ request.args.get('keyword', '') }}">
+                </div>
+
+                <!-- Risk Seviyesi -->
+                <div class="col-md-2">
+                    <label class="form-label">Risk Seviyesi</label>
+                    <select name="severity" class="form-select">
+                        <option value="">Tümü</option>
+                        <option value="CRITICAL" {% if request.args.get('severity') == 'CRITICAL' %}selected{% endif %}>CRITICAL</option>
+                        <option value="WARNING" {% if request.args.get('severity') == 'WARNING' %}selected{% endif %}>WARNING</option>
+                        <option value="INFO" {% if request.args.get('severity') == 'INFO' %}selected{% endif %}>INFO</option>
+                    </select>
+                </div>
+
+                <!-- Başlangıç Tarihi -->
+                <div class="col-md-2">
+                    <label class="form-label">Başlangıç</label>
+                    <input type="date" name="start_date" class="form-control" 
+                           value="{{ request.args.get('start_date', '') }}">
+                </div>
+
+                <!-- Bitiş Tarihi -->
+                <div class="col-md-2">
+                    <label class="form-label">Bitiş</label>
+                    <input type="date" name="end_date" class="form-control" 
+                           value="{{ request.args.get('end_date', '') }}">
+                </div>
+
+                <!-- Butonlar -->
+                <div class="col-md-2 d-flex align-items-end gap-2">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-search"></i> Ara
+                    </button>
+                    <a href="/logs" class="btn btn-outline-secondary" title="Filtreleri Temizle">
+                        <i class="fas fa-undo"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sonuç Tablosu -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <span class="fw-bold">Bulunan Kayıtlar</span>
+            <span class="badge bg-secondary">{{ events|length }} Kayıt</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover log-table mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">#</th>
+                        <th scope="col">Zaman</th>
+                        <th scope="col">Seviye</th>
+                        <th scope="col">Kaynak (IP)</th>
+                        <th scope="col">Kullanıcı</th>
+                        <th scope="col">Olay Tipi</th>
+                        <th scope="col">Mesaj</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for event in events %}
+                    <tr class="log-row">
+                        <td>{{ event.id }}</td>
+                        <td class="text-muted" style="white-space: nowrap;">
+                            {{ event.timestamp }}
+                        </td>
+                        <td>
+                            {% if event.severity == 'CRITICAL' %}
+                                <span class="badge badge-critical">CRITICAL</span>
+                            {% elif event.severity == 'WARNING' %}
+                                <span class="badge badge-warning">WARNING</span>
+                            {% elif event.severity == 'INFO' %}
+                                <span class="badge badge-info">INFO</span>
+                            {% else %}
+                                <span class="badge badge-safe">{{ event.severity }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold text-primary">{{ event.source }}</td>
+                        <td>{{ event.username }}</td>
+                        <td><span class="badge bg-light text-dark border">{{ event.event_type }}</span></td>
+                        <td>{{ event.message }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center py-4 text-muted">
+                            <i class="fas fa-search mb-2" style="font-size: 2rem;"></i><br>
+                            Kriterlere uygun kayıt bulunamadı.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<footer class="text-center py-4 text-muted small">
+    MiniSIEM Personal Edition &copy; 2024
+</footer>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>
