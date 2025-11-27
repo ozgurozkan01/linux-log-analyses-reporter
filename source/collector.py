@@ -234,8 +234,11 @@ def run():
 
     db.init_db()
     collect_system_status()
+    
     cpu, ram, disk, ports, port_details = collect_performance()
-    failed_logins, logs = analyze_ssh_logs()
+    failed_logins, ssh_events = analyze_ssh_logs()
+    sudo_events = analyze_sudo_logs()
+    all_events = ssh_events + sudo_events
     risk_score, generated_alerts = risk_engine.calculate_risk(failed_logins, ports, cpu, ram, disk)
     
     print(f"\n[RESULT] Risk Score: {risk_score}/100")
@@ -243,10 +246,11 @@ def run():
     
     db.insert_metrics(failed_logins, ports, port_details, cpu, ram, disk, risk_score)
     
-    for log in logs:
+    for log in all_events:
         db.insert_event(log['type'], log['source'], log['user'], log['severity'], log['msg'])
+        
         if log['severity'] in ['WARNING', 'CRITICAL']:
-            print(f"   >>> Incident Detected: {log['msg']} ({log['source']})")
+            print(f"   >>> Incident Detected: {log['msg']} ({log['user']} @ {log['source']})")
 
     for alert in generated_alerts:
         db.insert_alert(alert[0], alert[1], alert[2])
