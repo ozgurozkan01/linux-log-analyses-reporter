@@ -1,311 +1,670 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="tr" data-bs-theme="light">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CronWatch Dashboard</title>
+    <title>CronWatch SIEM | Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <style>
+        :root {
+            --bs-body-font-family: 'Inter', sans-serif;
+            --card-border-radius: 8px;
+        }
+
         body {
-            background-color: #f4f6f9;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 0.8rem;
+            background-color: #f3f4f6;
+        }
+
+        [data-bs-theme="dark"] body {
+            background-color: #0f172a;
+        }
+
+        [data-bs-theme="dark"] .card {
+            background-color: #1e293b;
+            border-color: #334155;
         }
 
         .card {
-            border: none;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-            transition: transform 0.2s;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            border-radius: var(--card-border-radius);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            margin-bottom: 1rem;
         }
 
-        .card:hover {
-            transform: translateY(-2px);
-        }
-
-        .risk-score-display {
-            font-size: 3.5rem;
-            font-weight: 700;
-            line-height: 1.2;
-        }
-
-        .status-badge {
-            font-size: 1rem;
-            padding: 10px 20px;
-            border-radius: 20px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .icon-box {
-            font-size: 2rem;
-            opacity: 0.8;
-        }
-
-        .table-custom th {
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
             font-weight: 600;
+            font-size: 0.75rem;
             text-transform: uppercase;
-            font-size: 0.8rem;
-            color: #6c757d;
+            padding: 0.6rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Risk Colors */
+        .risk-card.bg-success {
+            background: linear-gradient(145deg, #059669, #10b981);
+            color: white;
+        }
+
+        .risk-card.bg-warning {
+            background: linear-gradient(145deg, #d97706, #f59e0b);
+            color: white;
+        }
+
+        .risk-card.bg-danger {
+            background: linear-gradient(145deg, #dc2626, #ef4444);
+            color: white;
+        }
+
+        /* Heatmap */
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(24, 1fr);
+            gap: 2px;
+            height: 30px;
+        }
+
+        .heatmap-cell {
+            border-radius: 1px;
+            background: #e2e8f0;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.2);
+            cursor: help;
+        }
+
+        .hm-0 {
+            background-color: #f1f5f9;
+        }
+
+        [data-bs-theme="dark"] .hm-0 {
+            background-color: #334155;
+        }
+
+        .hm-1 {
+            background-color: #bae6fd;
+        }
+
+        .hm-2 {
+            background-color: #7dd3fc;
+        }
+
+        .hm-3 {
+            background-color: #38bdf8;
+        }
+
+        .hm-4 {
+            background-color: #0ea5e9;
+        }
+
+        .hm-5 {
+            background-color: #0284c7;
+        }
+
+        /* Collector Status */
+        .status-dot {
+            height: 8px;
+            width: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+
+        .status-dot.active {
+            background-color: #22c55e;
+            box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.inactive {
+            background-color: #ef4444;
+            box-shadow: 0 0 5px rgba(239, 68, 68, 0.5);
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0px rgba(34, 197, 94, 0.5);
+            }
+
+            100% {
+                box-shadow: 0 0 0 6px rgba(0, 0, 0, 0);
+            }
+        }
+
+        /* Timeline */
+        .timeline-wrapper {
+            position: relative;
+            padding-left: 15px;
+            border-left: 2px solid #e2e8f0;
+        }
+
+        [data-bs-theme="dark"] .timeline-wrapper {
+            border-color: #334155;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 10px;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: -21px;
+            top: 4px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+
+        .custom-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        [data-bs-theme="dark"] .custom-scroll::-webkit-scrollbar-track {
+            background: #2d3748;
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 4px;
+        }
+
+        [data-bs-theme="dark"] .custom-scroll::-webkit-scrollbar-thumb {
+            background: #4a5568;
+        }
+
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: #a0aec0;
         }
     </style>
 </head>
 
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-        <div class="container">
-            <a class="navbar-brand" href="/">🛡️ CronWatch</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item"><a class="nav-link active" href="/">Dashboard</a></li>
-                    <li class="nav-item"><a class="nav-link" href="/logs">Log Explorer</a></li>
-                </ul>
+
+    <nav class="navbar navbar-expand-lg border-bottom py-2" style="background-color: var(--bs-body-bg);">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+                <i class="fas fa-shield-halved text-primary"></i>
+                <span>CronWatch <span class="badge bg-primary rounded-pill ms-1"
+                        style="font-size: 0.6em; vertical-align: top;">Your Local SIEM</span></span>
+            </a>
+
+            <div class="d-flex align-items-center ms-auto gap-3">
+
+                <!-- OS / HOSTNAME INFO (Dinamik) -->
+                <div class="d-none d-lg-block text-end border-end pe-3 me-2">
+                    <div class="fw-bold text-body small">Welcome, {{ data.sys_info.hostname }}</div>
+                    <div class="text-muted" style="font-size: 0.7rem; line-height: 1;">
+                        <i class="fab fa-linux me-1"></i>{{ data.sys_info.os }} | {{ data.sys_info.ip_address }}
+                    </div>
+                </div>
+
+                <!-- COLLECTOR STATUS (Dinamik) -->
+                <div class="d-none d-md-flex align-items-center small border px-3 py-1 rounded-pill bg-light text-dark">
+                    {% if data.collector_status %}
+                    <span class="status-dot active"></span> <span class="fw-bold text-success"
+                        style="font-size: 0.75rem;">Active</span>
+                    {% else %}
+                    <span class="status-dot inactive"></span> <span class="fw-bold text-danger"
+                        style="font-size: 0.75rem;">Offline</span>
+                    {% endif %}
+                    <span class="text-muted ms-2 ps-2 border-start" id="live-uptime" style="font-size: 0.75rem;">{{
+                        data.sys_info.uptime }}</span>
+                </div>
+
+                <button class="btn btn-link nav-link p-0" id="darkModeToggle"><i class="fas fa-moon"></i></button>
+                <a href="/logs" class="btn btn-sm btn-outline-primary" style="font-size: 0.75rem;">Log Explorer</a>
             </div>
         </div>
     </nav>
 
-    <div class="container pb-5">
-
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h4 class="mb-0 text-dark fw-bold">System Stats</h4>
-                <small class="text-muted">
-                    Host: <b>{{ data.sys_info.hostname }}</b> | IP: <b>{{ data.sys_info.ip_address }}</b> | OS: {{
-                    data.sys_info.os }}
-                </small>
-            </div>
-            <div class="text-end">
-                <span class="badge bg-light text-dark border">
-                    <i class="fas fa-clock me-1"></i> Uptime: <span id="live-uptime">{{ data.sys_info.uptime }}</span>
-                </span>
-            </div>
-        </div>
-        <div class="row g-4 mb-4">
-            <div class="col-lg-4 col-md-12">
-                <div class="card h-100 text-white {{ risk_class }}" style="min-height: 220px;">
-                    <div class="card-body d-flex flex-column justify-content-center align-items-center text-center">
-                        <h6 class="text-white-50 text-uppercase mb-2">Security Score</h6>
-                        <div class="risk-score-display">{{ data.metrics.risk_score }}</div>
-                        <div class="status-badge bg-white bg-opacity-25 mt-2">{{ status_text }}</div>
-                        <small class="mt-3 text-white-50">0 (Safe) - 100 (Critical)</small>
+    <div class="container-fluid px-4 py-4">
+        <div class="row g-3 mb-4"">
+            <div class="col-lg-3 col-md-6" style="height: 290px;">
+                <div class="card risk-card h-100 {{ risk_class }} border-0 shadow-sm">
+                    <div class="card-body p-3">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <div>
+                                <h6 class="text-white-50 text-uppercase small fw-bold mb-0">Threat Level</h6>
+                                <h2 class="display-5 fw-bold mb-0">{{ data.metrics.risk_score }}</h2>
+                            </div>
+                            <i class="fas fa-shield-virus fa-2x opacity-50"></i>
+                        </div>
+                        <div class="small mt-2">
+                            {% if data.risk_breakdown %}
+                            <div class="d-flex justify-content-between text-white-50 mb-1" style="font-size: 0.7rem;">
+                                <span>Auth Fail</span> <span>{{ data.risk_breakdown.failed_auth_pct }}%</span>
+                            </div>
+                            <div class="progress" style="height: 3px; background: rgba(255,255,255,0.2);">
+                                <div class="progress-bar bg-white"
+                                    style="width: {{ data.risk_breakdown.failed_auth_pct }}%"></div>
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-8 col-md-12">
-                <div class="row g-4">
-                    <div class="col-md-4">
-                        <div class="card p-3 h-100">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <h6 class="text-muted mb-0">CPU</h6>
-                                <i class="fas fa-microchip icon-box text-primary"></i>
-                            </div>
-                            <h3 class="fw-bold">%<span id="live-cpu-text">{{ data.metrics.cpu_usage }}</span></h3>
-                            <div class="progress" style="height: 6px;">
-                                <div id="live-cpu-bar" class="progress-bar bg-primary" role="progressbar"
-                                    style="width: {{ data.metrics.cpu_usage }}%"></div>
-                            </div>
-                        </div>
+            <div class="col-lg-3 col-md-6" style="height: 290px;">
+                <div class="card h-100">
+                    <div class="card-header border-0 pb-0 pt-2">
+                        <span class="text-danger"><i class="fas fa-bolt me-2"></i>Anomalies</span>
                     </div>
-                    <div class="col-md-4">
-                        <div class="card p-3 h-100">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <h6 class="text-muted mb-0">RAM</h6>
-                                <i class="fas fa-memory icon-box text-info"></i>
-                            </div>
-                            <h3 class="fw-bold">%<span id="live-ram-text">{{ data.metrics.ram_usage }}</span></h3>
-                            <div class="progress" style="height: 6px;">
-                                <div id="live-ram-bar" class="progress-bar bg-info" role="progressbar"
-                                    style="width: {{ data.metrics.ram_usage }}%"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card p-3 h-100">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                <h6 class="text-muted mb-0">Disk</h6>
-                                <i class="fas fa-hdd icon-box text-warning"></i>
-                            </div>
-                            <h3 class="fw-bold">%{{ data.metrics.disk_usage }}</h3>
-                            <div class="progress" style="height: 6px;">
-                                <div class="progress-bar bg-warning" role="progressbar"
-                                    style="width: {{ data.metrics.disk_usage }}%"></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card p-3 h-100">
-                            <div class="d-flex align-items-center justify-content-between">
-                                <div class="d-flex align-items-center">
-                                    <div class="bg-light rounded-circle p-3 me-3">
-                                        <i class="fas fa-network-wired text-success fa-lg"></i>
-                                    </div>
-                                    <div>
-                                        <h6 class="text-muted mb-0">Open Ports</h6>
-                                        <h4 class="fw-bold mb-0">{{ data.metrics.open_ports }}</h4>
+                    <div class="card-body pt-1 p-2">
+                        {% if data.anomalies %}
+                        <ul class="list-unstyled mb-0">
+                            {% for anomaly in data.anomalies[:3] %}
+                            <li class="d-flex align-items-center mb-1 p-1 rounded bg-danger bg-opacity-10">
+                                <i class="fas fa-exclamation-triangle text-danger me-2" style="font-size: 0.7rem;"></i>
+                                <div class="lh-1 text-truncate">
+                                    <div class="fw-bold text-danger" style="font-size: 0.7rem;">{{ anomaly.title }}
                                     </div>
                                 </div>
-
-                                <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse"
-                                    data-bs-target="#portCollapse" aria-expanded="false">
-                                    <i class="fas fa-chevron-down"></i> Detay
-                                </button>
-                            </div>
-
-                            <div class="collapse mt-3" id="portCollapse">
-                                <div class="card card-body p-0 border-0">
-                                    <ul class="list-group list-group-flush small"
-                                        style="max-height: 150px; overflow-y: auto;">
-                                        {% for p in data.metrics.port_list %}
-                                        <li
-                                            class="list-group-item d-flex justify-content-between align-items-center px-2 py-1">
-                                            <span class="badge bg-secondary rounded-pill">{{ p.port }}</span>
-                                            <span class="text-muted text-uppercase fw-bold"
-                                                style="font-size: 0.75rem;">{{ p.service }}</span>
-                                        </li>
-                                        {% else %}
-                                        <li class="list-group-item text-muted">No details available.</li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card p-3">
-                            <div class="d-flex align-items-center">
-                                <div class="bg-light rounded-circle p-3 me-3">
-                                    <i class="fas fa-user-lock text-danger fa-lg"></i>
-                                </div>
-                                <div>
-                                    <h6 class="text-muted mb-0">Failed Logins (30 min)</h6>
-                                    <h4 class="fw-bold mb-0">{{ data.metrics.failed_logins }}</h4>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row g-4">
-            <div class="col-lg-8">
-                <div class="card h-100">
-                    <div class="card-header bg-white py-3">
-                        <h6 class="mb-0 fw-bold"><i class="fas fa-chart-line me-2 text-primary"></i>Risk Trend (Last 20
-                            Scan)</h6>
-                    </div>
-                    <div class="card-body">
-                        <canvas id="riskChart" style="height: 300px;"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-4">
-                <div class="card h-100">
-                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                        <h6 class="mb-0 fw-bold"><i class="fas fa-bell me-2 text-danger"></i>Latest Alerts</h6>
-                        <a href="/logs" class="btn btn-sm btn-outline-secondary">All</a>
-                    </div>
-                    <div class="list-group list-group-flush">
-                        {% for alert in data.alerts %}
-                        <div class="list-group-item">
-                            <div class="d-flex w-100 justify-content-between">
-                                <strong
-                                    class="{% if alert.level == 'CRITICAL' %}text-danger{% elif alert.level == 'WARNING' %}text-warning{% else %}text-info{% endif %}">
-                                    {{ alert.title }}
-                                </strong>
-                                <small class="text-muted" style="font-size: 0.75rem;">{{ alert.timestamp.split(' ')[1]
-                                    }}</small>
-                            </div>
-                            <p class="mb-1 small text-muted">{{ alert.description }}</p>
-                        </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
                         {% else %}
-                        <div class="text-center py-4 text-muted">
-                            <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
-                            <p>No active threat was found.</p>
+                        <div
+                            class="d-flex flex-column align-items-center justify-content-center h-100 text-muted opacity-50">
+                            <i class="fas fa-check-circle fa-2x mb-1"></i>
+                            <span style="font-size: 0.7rem;">System Clean</span>
                         </div>
-                        {% endfor %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3" style="height: 290px;">
+                <div class="card h-100">
+                    <div class="card-header py-2 border-0 bg-transparent">
+                        <span class="fw-bold text-uppercase small"><i class="fas fa-microchip me-2"></i>Active
+                            Processes</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-sm table-hover mb-0" style="font-size: 0.7rem;">
+                            <thead class="table-light text-muted text-uppercase">
+                                <tr>
+                                    <th class="ps-3 py-1">PID</th>
+                                    <th class="py-1">Name</th>
+                                    <th class="py-1">User</th>
+                                    <th class="text-end pe-3 py-1">CPU</th>
+                                </tr>
+                            </thead>
+                            <tbody id="live-process-list">
+                                {% if analytics.top_processes %}
+                                {% for proc in analytics.top_processes %}
+                                <tr>
+                                    <td class="ps-3 font-monospace text-muted py-1">{{ proc.pid }}</td>
+
+                                    <td class="fw-bold text-primary py-1 text-truncate" style="max-width: 120px;">
+                                        {{ proc.name }}
+                                    </td>
+
+                                    <td class="text-muted py-1">{{ proc.username }}</td>
+
+                                    <td
+                                        class="text-end pe-3 fw-bold py-1 
+                                            {% if proc.cpu_percent > 50 %}text-danger{% elif proc.cpu_percent > 20 %}text-warning{% else %}text-success{% endif %}">
+                                        {{ proc.cpu_percent }}%
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center p-3 text-muted">No high load processes.</td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3">
+                <div class="card h-80">
+                    <div class="card-header py-1" style="font-size: 0.7rem;">System Stats</div>
+                    <div class="card-body p-0 d-flex align-items-center">
+                        <div class="row w-100 m-0">
+
+                            <div class="col-4 border-end p-2 d-flex align-items-center justify-content-center">
+                                <i class="fas fa-microchip text-primary fs-3 me-2 opacity-75"></i>
+                                <div class="lh-1">
+                                    <div class="fw-bold" id="live-cpu-text" style="font-size: 1.1rem;">%{{
+                                        data.metrics.cpu_usage }}</div>
+                                    <div class="text-muted text-uppercase fw-bold" style="font-size: 0.6rem;">CPU</div>
+                                </div>
+                            </div>
+                            <div class="col-4 border-end p-2 d-flex align-items-center justify-content-center">
+                                <i class="fas fa-memory text-info fs-3 me-2 opacity-75"></i>
+                                <div class="lh-1">
+                                    <div class="fw-bold" id="live-ram-text" style="font-size: 1.1rem;">%{{
+                                        data.metrics.ram_usage }}</div>
+                                    <div class="text-muted text-uppercase fw-bold" style="font-size: 0.6rem;">RAM</div>
+                                </div>
+                            </div>
+                            <div class="col-4 p-2 d-flex align-items-center justify-content-center">
+                                <i class="fas fa-hdd text-warning fs-3 me-2 opacity-75"></i>
+                                <div class="lh-1">
+                                    <div class="fw-bold" style="font-size: 1.1rem;">%{{ data.metrics.disk_usage }}</div>
+                                    <div class="text-muted text-uppercase fw-bold" style="font-size: 0.6rem;">DISK</div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+                <div class="card border-0 shadow-sm" style="height: 200px; overflow: hidden">
+                    <div
+                        class="card-header bg-transparent border-bottom py-2 d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-network-wired text-primary me-2" style="font-size: 0.8rem;"></i>
+                            <span class="fw-bold text-uppercase small" style="letter-spacing: 0.5px;">Network
+                                Ports</span>
+                        </div>
+                        <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-2 py-1"
+                            style="font-size: 0.7rem;">
+                            {{ data.metrics.open_ports }} Active
+                        </span>
+                    </div>
+
+                    <div class="card-body p-0 custom-scroll" style="overflow-y: auto;">
+                        <table class="table table-hover align-middle mb-0" style="font-size: 0.75rem;">
+                            <thead class="table-light sticky-top small text-muted text-uppercase">
+                                <tr>
+                                    <th class="ps-3" style="width: 30%;">Port</th>
+                                    <th style="width: 50%;">Service</th>
+                                    <th class="text-end pe-3" style="width: 20%;">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if data.metrics.port_list %}
+                                {% for port in data.metrics.port_list %}
+                                <tr>
+                                    <td class="ps-3">
+                                        <span>{{ port.port }}</span>
+                                    </td>
+                                    <td class="fw-bold text-primary text-truncate" style="max-width: 100px;">
+                                        {{ port.service }}
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        <div class="d-flex align-items-center justify-content-end gap-1">
+                                            <small class="text-success fw-bold"
+                                                style="font-size: 0.65rem;">LISTEN</small>
+                                            <span class="status-dot active" style="width: 6px; height: 6px;"></span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-center text-muted py-4">
+                                        <i class="fas fa-shield-alt fa-2x mb-2 opacity-25"></i>
+                                        <div>No open ports found.</div>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <h6 class="text-muted fw-bold text-uppercase mb-2 small" style="letter-spacing: 1px; font-size: 0.7rem;">
+                Network Intelligence</h6>
+            <div class="row g-3 mb-4">
+                <div class="col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header"><span><i class="fas fa-chart-bar me-2"></i>Traffic Volume</span></div>
+                        <div class="card-body p-2">
+                            <div style="height: 140px; width: 100%;">
+                                <canvas id="volumeChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header"><span><i class="fas fa-th me-2"></i>24h Intensity</span></div>
+                        <div class="card-body d-flex flex-column justify-content-center p-3">
+                            <div class="heatmap-grid" id="eventHeatmap"></div>
+                            <div class="d-flex justify-content-between mt-1 small text-muted"
+                                style="font-size: 0.65rem;">
+                                <span>00:00</span><span>12:00</span><span>23:59</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header"><span><i class="fas fa-globe me-2"></i>Top Sources</span></div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm table-hover mb-0" style="font-size: 0.75rem;">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">IP</th>
+                                        <th>Count</th>
+                                        <th class="text-end pe-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for ip in analytics.top_ips[:5] %}
+                                    <tr>
+                                        <td class="ps-3 font-monospace">{{ ip.source }}</td>
+                                        <td>{{ ip.count }}</td>
+                                        <td class="text-end pe-3 text-danger fw-bold">Risk</td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="3" class="text-center py-3 text-muted">No external threats.</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row g-3 mb-4">
+                <div class="col-lg-5">
+                    <div class="card h-100">
+                        <div class="card-header"><span><i class="fas fa-link me-2"></i>Recent Alerts</span></div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm table-striped align-middle mb-0" style="font-size: 0.75rem;">
+                                <thead>
+                                    <tr>
+                                        <th class="ps-3">Source</th>
+                                        <th>Alert</th>
+                                        <th class="text-end pe-3">Level</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% if data.alerts %}
+                                    {% for alert in data.alerts[:3] %}
+                                    <tr>
+                                        <td class="ps-3 fw-bold text-muted">System</td>
+                                        <td>{{ alert.title }}</td>
+                                        <td class="text-end pe-3">
+                                            <span
+                                                class="badge {% if alert.level == 'CRITICAL' %}bg-danger{% else %}bg-warning{% endif %}">{{
+                                                alert.level }}</span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="3" class="text-center p-3 text-muted">No correlated threats.</td>
+                                    </tr>
+                                    {% endif %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3">
+                    <div class="card h-100">
+                        <div class="card-header">Firewall Stats</div>
+                        <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                            <div style="height: 100px; width: 100px; margin-bottom: 10px;">
+                                <canvas id="firewallChart"></canvas>
+                            </div>
+                            <div class="w-100 px-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1 border-bottom pb-1">
+                                    <span class="badge bg-success" style="font-size: 0.65rem;">ALLOW</span>
+                                    <span class="fw-bold font-monospace">{{ analytics.firewall_stats.allow }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="badge bg-danger" style="font-size: 0.65rem;">DENY</span>
+                                    <span class="fw-bold font-monospace">{{ analytics.firewall_stats.deny }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">Security Timeline</div>
+                        <div class="card-body p-3">
+                            <div class="timeline-wrapper ms-2">
+                                {% for alert in data.alerts[:5] %}
+                                <div class="timeline-item">
+                                    <div
+                                        class="timeline-dot {% if alert.level == 'CRITICAL' %}bg-danger{% elif alert.level == 'WARNING' %}bg-warning{% else %}bg-info{% endif %}">
+                                    </div>
+                                    <div class="d-flex align-items-center mb-1">
+                                        <span
+                                            class="badge me-2 {% if alert.level == 'CRITICAL' %}bg-danger{% elif alert.level == 'WARNING' %}bg-warning{% else %}bg-info{% endif %}"
+                                            style="font-size: 0.65rem;">{{ alert.level }}</span>
+                                        <small class="text-muted" style="font-size: 0.7rem;">{{ alert.timestamp
+                                            }}</small>
+                                    </div>
+                                    <p class="mb-0 text-muted" style="font-size: 0.75rem;">{{ alert.title }}</p>
+                                </div>
+                                {% else %}
+                                <div class="text-muted small">No recent alerts.</div>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-    </div>
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
-    <script>
-        const chartLabels = {{ chart_labels | tojson }};
-        const chartData = {{ chart_risk | tojson }};
+        <script>
+            const volumeLabels = {{ analytics.volume_labels | tojson | safe }};
+            const volumeData = {{ analytics.volume_data | tojson | safe }};
+            const heatmapData = {{ analytics.heatmap_data | tojson | safe }};
+            const firewallStats = {{ analytics.firewall_stats | tojson | safe }};
 
-        const ctx = document.getElementById('riskChart').getContext('2d');
-        const riskChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: chartLabels,
-                datasets: [{
-                    label: 'Risk Level',
-                    data: chartData,
-                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                    borderColor: '#dc3545',
-                    borderWidth: 2,
-                    pointBackgroundColor: '#dc3545',
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        grid: { borderDash: [2, 2] }
-                    },
-                    x: {
-                        grid: { display: false }
-                    }
-                },
-                plugins: {
-                    legend: { display: false }
-                }
+            const toggleBtn = document.getElementById('darkModeToggle');
+            const html = document.documentElement;
+            if (localStorage.getItem('theme') === 'dark') html.setAttribute('data-bs-theme', 'dark');
+
+            function getChartColors() {
+                const isDark = html.getAttribute('data-bs-theme') === 'dark';
+                return { text: isDark ? '#94a3b8' : '#64748b', grid: isDark ? '#334155' : '#e2e8f0' };
             }
-        });
-    </script>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-            return new bootstrap.Tooltip(tooltipTriggerEl)
-        })
-    </script>
-    <script>
-        setInterval(function () {
-            fetch('/api/live-stats')
-                .then(response => response.json())
-                .then(data => {
-                    const uptimeEl = document.getElementById('live-uptime');
-                    if (uptimeEl) uptimeEl.innerText = data.uptime;
+            // HEATMAP
+            const heatmapEl = document.getElementById('eventHeatmap');
+            if (heatmapData && heatmapData.length > 0) {
+                const maxVal = Math.max(...heatmapData) || 1;
+                heatmapData.forEach((count, i) => {
+                    const cell = document.createElement('div');
+                    cell.classList.add('heatmap-cell');
+                    let intensity = 0;
+                    if (count > 0) intensity = Math.ceil((count / maxVal) * 5);
+                    cell.classList.add(`hm-${intensity}`);
+                    cell.title = `${i}:00 - ${count} logs`;
+                    heatmapEl.appendChild(cell);
+                });
+            }
 
-                    const cpuText = document.getElementById('live-cpu-text');
-                    const cpuBar = document.getElementById('live-cpu-bar');
-                    if (cpuText) cpuText.innerText = data.cpu;
-                    if (cpuBar) cpuBar.style.width = data.cpu + "%";
+            // CHARTS
+            const ctxVol = document.getElementById('volumeChart').getContext('2d');
+            let volumeChart = new Chart(ctxVol, {
+                type: 'bar',
+                data: {
+                    labels: volumeLabels,
+                    datasets: [{ label: 'Logs', data: volumeData, backgroundColor: '#4f46e5', borderRadius: 2 }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { color: getChartColors().text, font: { size: 9 } } },
+                        y: { grid: { display: true, color: getChartColors().grid }, ticks: { color: getChartColors().text, font: { size: 9 } }, beginAtZero: true }
+                    }
+                }
+            });
 
-                    const ramText = document.getElementById('live-ram-text');
-                    const ramBar = document.getElementById('live-ram-bar');
-                    if (ramText) ramText.innerText = data.ram;
-                    if (ramBar) ramBar.style.width = data.ram + "%";
-                })
-                .catch(error => console.error('Error:', error));
-        }, 3000);
-    </script>
+            const ctxFire = document.getElementById('firewallChart').getContext('2d');
+            let firewallChart = new Chart(ctxFire, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Allow', 'Deny'],
+                    datasets: [{ data: [firewallStats.allow, firewallStats.deny], backgroundColor: ['#10b981', '#ef4444'], borderWidth: 0 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, cutout: '75%', plugins: { legend: { display: false } } }
+            });
+
+            toggleBtn.addEventListener('click', () => {
+                const isDark = html.getAttribute('data-bs-theme') === 'dark';
+                html.setAttribute('data-bs-theme', isDark ? 'light' : 'dark');
+                localStorage.setItem('theme', isDark ? 'light' : 'dark');
+                const colors = getChartColors();
+                volumeChart.options.scales.x.ticks.color = colors.text;
+                volumeChart.options.scales.y.ticks.color = colors.text;
+                volumeChart.options.scales.y.grid.color = colors.grid;
+                volumeChart.update();
+            });
+
+            setInterval(function () {
+                fetch('/api/live-stats')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (document.getElementById('live-uptime')) document.getElementById('live-uptime').innerText = data.uptime;
+                        if (document.getElementById('live-cpu-text')) document.getElementById('live-cpu-text').innerText = '%' + data.cpu;
+                        if (document.getElementById('live-ram-text')) document.getElementById('live-ram-text').innerText = '%' + data.ram;
+
+                        const tableBody = document.getElementById('live-process-list');
+                        if (tableBody && data.processes) {
+                            tableBody.innerHTML = '';
+
+                            data.processes.forEach(proc => {
+                                let colorClass = 'text-success';
+                                if (proc.cpu_percent > 50) colorClass = 'text-danger';
+                                else if (proc.cpu_percent > 20) colorClass = 'text-warning';
+
+                                const row = `
+                                <tr>
+                                    <td class="ps-3 font-monospace text-muted py-1">${proc.pid}</td>
+                                    <td class="fw-bold text-primary py-1 text-truncate" style="max-width: 120px;">${proc.name}</td>
+                                    <td class="text-muted py-1">${proc.username}</td>
+                                    <td class="text-end pe-3 fw-bold py-1 ${colorClass}">${proc.cpu_percent}%</td>
+                                </tr>
+                            `;
+                                tableBody.innerHTML += row;
+                            });
+                        }
+                    })
+                    .catch(e => console.log(e));
+            }, 2000);
+        </script>
 </body>
 
 </html>
