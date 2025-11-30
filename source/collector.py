@@ -10,6 +10,8 @@ import risk_engine
 import json
 import shutil
 import binascii 
+import hashlib
+
 from collections import defaultdict, deque
 from datetime import datetime, timedelta
 
@@ -493,6 +495,111 @@ def analyze_audit_logs():
 
     return events
 
+def calculate_file_hash(filepath):
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(filepath, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest()
+    except Exception as e:
+        print(f"[ERROR] Hash calculation error for {filepath}: {e}")
+        return None
+
+def analyze_file_integrity():
+    events = []
+    
+    CRITICAL_FILES = [
+        "/etc/passwd",
+        "/etc/shadow",
+        "/etc/group",
+        "/etc/sudoers",
+        "/etc/ssh/sshd_config",
+        "/etc/hosts",
+        "/bin/ls",
+        "/bin/ps",
+        "/usr/bin/python3",
+        "/tmp/siem_test_file.txt"
+    ]
+
+    print("[LOG] FIM (File Integrity Monitoring) scanning...")
+
+    for filepath in CRITICAL_FILES:
+        if not os.path.exists(filepath):
+            stored_data = db.get_file_baseline(filepath)
+            
+            if stored_data:
+                msg = f"CRITICAL FILE MISSING: {filepath} has been deleted or moved!"
+                events.append({
+                    "type": "FIM_MISSING",
+                    "source": "Local/FIM",
+                    "user": "System",
+                    "severity": "CRITICAL",
+                    "msg": msg
+                })
+            continue
+
+        try:
+            file_stat = os.stat(filepath)
+            
+            current_perms = oct(file_stat.st_mode)[-3:]
+            current_uid = file_stat.st_uid
+            current_gid = file_stat.st_gid
+            
+            current_hash = calculate_file_hash(filepath)
+            if not current_hash:
+                continue
+
+            stored_data = db.get_file_baseline(filepath)
+
+            if stored_data is None:
+                db.update_file_baseline(filepath, current_hash, current_perms, current_uid, current_gid)
+                continue
+
+            if current_hash != stored_data['hash']:
+                msg = f"FILE CONTENT CHANGED: {filepath} integrity violation!"
+                
+                events.append({
+                    "type": "FIM_CONTENT_CHANGE",
+                    "source": "Local/FIM",
+                    "user": "System",
+                    "severity": "CRITICAL",
+                    "msg": msg
+                })
+                db.update_file_baseline(filepath, current_hash, current_perms, current_uid, current_gid)
+
+            elif (current_perms != stored_data['perms'] or 
+                  current_uid != stored_data['uid'] or 
+                  current_gid != stored_data['gid']):
+                
+                details = []
+                if current_perms != stored_data['perms']: details.append(f"Perms: {stored_data['perms']}->{current_perms}")
+                if current_uid != stored_data['uid']: details.append(f"UID: {stored_data['uid']}->{current_uid}")
+                
+                msg = f"FILE METADATA CHANGED: {filepath} ({', '.join(details)})"
+                
+                events.append({
+                    "type": "FIM_PERM_CHANGE",
+                    "source": "Local/FIM",
+                    "user": "System",
+                    "severity": "WARNING",
+                    "msg": msg
+                })
+                db.update_file_baseline(filepath, current_hash, current_perms, current_uid, current_gid)
+
+        except PermissionError:
+            events.append({
+                "type": "FIM_ACCESS_DENIED",
+                "source": "Local/FIM",
+                "user": "System",
+                "severity": "WARNING",
+                "msg": f"Permission Denied for FIM check: {filepath}"
+            })
+        except Exception as e:
+            print(f"[ERROR] FIM check failed for {filepath}: {e}")
+
+    return events
+
 def analyze_firewall_logs():
     events = []
     since_time = get_since_timestamp()
@@ -673,15 +780,19 @@ def run():
     sudo_events = analyze_sudo_logs()
     audit_events = analyze_audit_logs()
     firewall_events = analyze_firewall_logs() 
+    fim_events = analyze_file_integrity()
 
-    risk_score, generated_alerts = risk_engine.calculate_risk(failed_logins, ports, cpu, ram, disk)
-    
+    risk_score, generated_alerts = risk_engine.calculate_risk(
+        failed_logins, ports, cpu, ram, disk, 
+        audit_events + fim_events 
+    )
+
     print(f"\n[RESULT] Risk Score: {risk_score}/100")
     print("[DB] Data being recorded...")
     
     db.insert_metrics(failed_logins, ports, port_details, cpu, ram, disk, risk_score)
     
-    all_events = ssh_events + sudo_events + audit_events + firewall_events
+    all_events = ssh_events + sudo_events + audit_events + firewall_events + fim_events
     
     for log in all_events:
         db.insert_event(log['type'], log['source'], log['user'], log['severity'], log['msg'])
@@ -709,8 +820,9 @@ def run():
             print(f"   >>> ALERT: {log['msg']} ({log['user']})")
 
     for alert in generated_alerts:
-        db.insert_alert(alert[0], alert[1], alert[2])
-        print(f"   !!! ALARM ACTIVATED: {alert[1]}")
+        db.insert_alert(alert['level'].upper(), alert['title'], alert['msg'])
+        print(f"   !!! ALARM ACTIVATED: {alert['title']}")
+
 
     db.maintenance(retention_days=7)
 
