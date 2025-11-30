@@ -1,67 +1,118 @@
-def calculate_risk(failed_logins, open_ports, cpu, ram, disk):
+def calculate_risk(failed_logins, open_ports, cpu, ram, disk, security_events):
+
     score = 0
-    alerts = []
+    anomalies = []
 
     if failed_logins > 10:
         score += 60
-        alerts.append((
-            "CRITICAL",
-            "Brute Force Attack",
-            f"{failed_logins} failed login attempts detected in the last 30 minutes!"
-        ))
-
+        anomalies.append({
+            "level": "critical",
+            "title": "Brute Force Attack",
+            "msg": f"URGENT: {failed_logins} failed login attempts detected in short time!",
+            "time": "Auth Log"
+        })
     elif failed_logins > 2:
         score += 20
-        alerts.append((
-            "WARNING",
-            "Suspicious Login Activity",
-            f"{failed_logins} failed login attempts detected."
-        ))
-
-    if open_ports > 15:
-        score += 15
-        alerts.append((
-            "INFO",
-            "High Network Activity",
-            f"Open port count is higher than normal: {open_ports}"
-        ))
+        anomalies.append({
+            "level": "warning",
+            "title": "Suspicious Login",
+            "msg": f"{failed_logins} failed login attempts detected.",
+            "time": "Auth Log"
+        })
 
     if cpu > 90:
         score += 25
-        alerts.append((
-            "HIGH",
-            "Critical CPU Usage",
-            f"CPU usage is at {cpu}%!"
-        ))
-
+        anomalies.append({
+            "level": "critical",
+            "title": "Critical CPU Usage",
+            "msg": f"CPU usage is spiking at {cpu}%! Check for crypto-miners.",
+            "time": "System"
+        })
     elif cpu > 75:
         score += 10
-
+    
     if ram > 90:
         score += 15
-        alerts.append((
-            "WARNING",
-            "High RAM Usage",
-            f"Memory usage is almost full: {ram}%"
-        ))
+        anomalies.append({
+            "level": "warning",
+            "title": "High RAM Usage",
+            "msg": f"Memory usage is critical: {ram}%",
+            "time": "System"
+        })
 
     if disk > 95:
         score += 15
-        alerts.append((
-            "CRITICAL",
-            "Disk Almost Full",
-            "Disk space is critically low! System may become unstable."
-        ))
-
+        anomalies.append({
+            "level": "critical",
+            "title": "Disk Space Critical",
+            "msg": "Disk is almost full (>95%). System crash imminent.",
+            "time": "System"
+        })
     elif disk > 85:
         score += 5
-        alerts.append((
-            "INFO",
-            "Disk Usage Warning",
-            f"Disk usage has reached {disk}%."
-        ))
+        anomalies.append({
+            "level": "info",
+            "title": "Disk Usage Warning",
+            "msg": f"Disk usage reached {disk}%.",
+            "time": "System"
+        })
 
+    if open_ports > 15:
+        score += 15
+        anomalies.append({
+            "level": "warning",
+            "title": "Abnormal Network Activity",
+            "msg": f"Open port count is higher than normal: {open_ports}",
+            "time": "Network"
+        })
+
+    for event in security_events:
+        
+        if event['type'] == "FIM_MISSING":
+            score += 50
+            anomalies.append({
+                "level": "critical",
+                "title": "Critical File Missing",
+                "msg": event['msg'],
+                "time": "FIM System"
+            })
+            
+        elif event['type'] == "FIM_CONTENT_CHANGE":
+            score += 40
+            anomalies.append({
+                "level": "critical",
+                "title": "File Content Changed",
+                "msg": event['msg'],
+                "time": "FIM System"
+            })
+            
+        elif event['type'] == "FIM_PERM_CHANGE":
+            score += 15
+            anomalies.append({
+                "level": "warning",
+                "title": "File Perms Changed",
+                "msg": event['msg'],
+                "time": "FIM System"
+            })
+            
+        elif event['type'] == "FIM_ACCESS_DENIED":
+            score += 10
+            anomalies.append({
+                "level": "warning",
+                "title": "FIM Access Denied",
+                "msg": event['msg'],
+                "time": "FIM System"
+            })
+
+        elif event['severity'] == "CRITICAL":
+            score += 30
+            anomalies.append({
+                "level": "critical",
+                "title": "Security Alert",
+                "msg": f"{event['type']}: {event['msg']}",
+                "time": event['source']
+            })
 
     final_score = min(score, 100)
     
-    return final_score, alerts
+    return final_score, anomalies
