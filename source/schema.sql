@@ -46,6 +46,16 @@ CREATE TABLE IF NOT EXISTS firewall_logs (
     direction TEXT    
 );
 
+CREATE TABLE IF NOT EXISTS file_integrity (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    file_path TEXT UNIQUE NOT NULL,
+    file_hash TEXT,
+    permissions TEXT,
+    uid INTEGER,
+    gid INTEGER,
+    last_checked DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE INDEX IF NOT EXISTS idx_fw_action ON firewall_logs(action);
 CREATE INDEX IF NOT EXISTS idx_fw_src_ip ON firewall_logs(src_ip);
 CREATE INDEX IF NOT EXISTS idx_fw_timestamp ON firewall_logs(timestamp);
@@ -53,3 +63,5 @@ CREATE INDEX IF NOT EXISTS idx_events_source ON events(source);
 CREATE INDEX IF NOT EXISTS idx_events_user ON events(username);
 CREATE INDEX IF NOT EXISTS idx_events_severity ON events(severity);
 CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events(timestamp);
+
+
