@@ -1,11 +1,14 @@
 import sys
 import os
 import math
+
+from typing import Final
 from flask import Flask, render_template, request, jsonify
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-sys.path.append(project_root)
+
+CURRENT_DIR    : Final = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT   : Final = os.path.dirname(CURRENT_DIR)
+sys.path.append(PROJECT_ROOT)
 
 from source import db
 import utils 

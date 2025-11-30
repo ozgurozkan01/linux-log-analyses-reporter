@@ -3,19 +3,26 @@ import psutil
 import datetime
 import subprocess
 import json 
+
+from typing import Final
 from source import db
 
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
-COLLECTOR_PATH = os.path.join(project_root, "source", "collector.py")
+CURRENT_DIR    : Final = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT   : Final = os.path.dirname(CURRENT_DIR)
+COLLECTOR_PATH : Final = os.path.join(PROJECT_ROOT, "source", "collector.py")
+CURSOR_FILE    : Final = os.path.join(PROJECT_ROOT, "source", "last_scan_cursor.txt")
+
 
 def get_live_system_stats():
     cpu = psutil.cpu_percent(interval=None)
     ram = psutil.virtual_memory().percent
     processes = get_top_processes() 
+    last_scan_time = get_last_scan_time()
+
     boot_time = datetime.datetime.fromtimestamp(psutil.boot_time())
     uptime_str = str(datetime.datetime.now() - boot_time).split('.')[0]
-    return {'cpu': cpu, 'ram': ram, 'uptime': uptime_str, 'processes': processes}
+    
+    return {'cpu': cpu, 'ram': ram, 'uptime': uptime_str, 'processes': processes, 'last_scan': last_scan_time}
 
 def check_collector_status():
     file_exists = os.path.isfile(COLLECTOR_PATH)
@@ -46,7 +53,9 @@ def fetch_and_normalize_data():
         'sys_info': raw_data.get('sys_info') or {'hostname': '-', 'ip_address': '-', 'uptime': '-'},
         'metrics': raw_data.get('metrics') or {'risk_score': 0, 'cpu_usage': 0, 'ram_usage': 0, 'disk_usage': 0, 'open_ports': 0, 'failed_logins': 0},
         'alerts': raw_data.get('alerts') or [],
-        'anomalies': [{'title': a['title'], 'desc': a['description']} for a in (raw_data.get('alerts') or []) if a['level'] == 'CRITICAL']
+        'anomalies': [{'title': a['title'], 'desc': a['description']} for a in (raw_data.get('alerts') or []) if a['level'] == 'CRITICAL'],
+        'last_scan': get_last_scan_time(),
+        'collector_status': check_collector_status() 
     }
 
     try:
@@ -74,6 +83,7 @@ def fetch_and_normalize_data():
         data['risk_breakdown'] = {'failed_auth_pct': 0, 'anomaly_pct': 0}
 
     return data, analytics
+
 def get_top_processes(limit=8):
     process_map = {}
     cpu_count = psutil.cpu_count() or 1
@@ -119,3 +129,14 @@ def get_top_processes(limit=8):
             p['name'] = f"{p['name']} ({p['count']}x)"
 
     return sorted(grouped_procs, key=lambda x: x['cpu_percent'], reverse=True)[:limit]
+
+
+def get_last_scan_time():
+    if os.path.exists(CURSOR_FILE):
+        try:
+            with open(CURSOR_FILE, 'r') as f:
+                return f.read().strip()
+        except Exception:
+            return "Read Error"
+    else:
+        return "Not Found"
