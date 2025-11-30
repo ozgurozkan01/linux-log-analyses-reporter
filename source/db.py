@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Final
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -23,7 +23,6 @@ def init_db():
             schema_script = f.read()
         
         conn.executescript(schema_script)
-        
         conn.commit()
         print("[INFO] Database Schema loading successfully.")
         
@@ -348,5 +347,45 @@ def maintenance(retention_days=7):
         
     except Exception as e:
         print(f"[ERRIR] Problem occured during maintenance: {e}")
+    finally:
+        conn.close()
+
+def get_file_baseline(file_path):
+    conn = create_db_connection()
+    cursor = conn.cursor()
+    result = None
+    try:
+        cursor.execute("SELECT file_hash, permissions, uid, gid FROM file_integrity WHERE file_path = ?", (file_path,))
+        row = cursor.fetchone()
+        if row:
+            result = {
+                "hash": row['file_hash'],
+                "perms": row['permissions'],
+                "uid": row['uid'],
+                "gid": row['gid']
+            }
+    except Exception as e:
+        print(f"[DB ERROR] FIM get baseline error: {e}")
+    finally:
+        conn.close()
+    return result
+
+def update_file_baseline(file_path, new_hash, perms, uid, gid):
+    conn = create_db_connection()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO file_integrity (file_path, file_hash, permissions, uid, gid, last_checked)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(file_path) DO UPDATE SET
+                file_hash = excluded.file_hash,
+                permissions = excluded.permissions,
+                uid = excluded.uid,
+                gid = excluded.gid,
+                last_checked = excluded.last_checked
+        """, (file_path, new_hash, perms, uid, gid, datetime.now()))
+        conn.commit()
+    except Exception as e:
+        print(f"[DB ERROR] FIM update error: {e}")
     finally:
         conn.close()
