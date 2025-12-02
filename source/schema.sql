@@ -25,7 +25,9 @@ CREATE TABLE IF NOT EXISTS alerts (
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     level TEXT,
     title TEXT,
-    description TEXT
+    description TEXT,
+    status TEXT DEFAULT 'OPEN',
+    details TEXT
 );
 
 CREATE TABLE IF NOT EXISTS system_info (
@@ -50,9 +52,11 @@ CREATE TABLE IF NOT EXISTS file_integrity (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     file_path TEXT UNIQUE NOT NULL,
     file_hash TEXT,
+    content TEXT, 
     permissions TEXT,
     uid INTEGER,
     gid INTEGER,
+    inode INTEGER,
     last_checked DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
