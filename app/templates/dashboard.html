@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="tr" data-bs-theme="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CronWatch SIEM | Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    {% include 'navbar.html' %}
+    <div class="container-fluid px-4 py-4"></div>
+    <div class="container-fluid px-4 py-4">
+        <div class="row g-3 mb-4">
+            <div class="col-lg-3 col-md-6" style="height: 290px; flex:1.4;">
+                {% set risk_bg = 'risk-gradient-low' %}
+                {% set text_color = '#00ff88' %}
+                {% set status_text = 'SYSTEM SECURE' %}
+                {% set status_msg = 'All systems functioning within normal parameters.' %}
+
+                {% if data.metrics.risk_score >= 80 %}
+                {% set risk_bg = 'risk-gradient-high' %}
+                {% set text_color = '#ff0055' %}
+                {% set status_text = 'CRITICAL THREAT' %}
+                {% set status_msg = 'Immediate action required! Multiple security breaches detected.' %}
+                {% elif data.metrics.risk_score >= 50 %}
+                {% set risk_bg = 'risk-gradient-medium' %}
+                {% set text_color = '#ffa500' %}
+                {% set status_text = 'ELEVATED RISK' %}
+                {% set status_msg = 'Unusual activity detected. Investigate anomalies.' %}
+                {% endif %}
+
+                <div class="card risk-card h-100 {{ risk_bg }}">
+                    <div class="card-body p-4 d-flex flex-column justify-content-between">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h6 class="text-uppercase small fw-bold mb-1"
+                                    style="color: rgba(255,255,255,0.7); letter-spacing: 1px;">Threat Level</h6>
+                                <h2 class="display-3 fw-bold mb-0"
+                                    style="text-shadow: 0 0 20px {{ text_color }}; color: {{ text_color }};">
+                                    {{ data.metrics.risk_score }}
+                                </h2>
+                            </div>
+                            <i class="fas fa-shield-virus fa-3x"
+                                style="color: {{ text_color }}; opacity: 0.8; text-shadow: 0 0 15px {{ text_color }};"></i>
+                        </div>
+                        <div class="my-2 p-3 rounded"
+                            style="background: rgba(0, 0, 0, 0.25); border-left: 3px solid {{ text_color }};">
+                            <div class="fw-bold text-uppercase mb-1"
+                                style="color: {{ text_color }}; font-size: 0.75rem; letter-spacing: 1px;">
+                                {{ status_text }}
+                            </div>
+                            <div style="color: #b0b3c5; font-size: 0.7rem; line-height: 1.4;">
+                                {{ status_msg }}
+                            </div>
+                        </div>
+                        <div>
+                            {% if data.risk_breakdown %}
+                            <div class="d-flex justify-content-between mb-1"
+                                style="font-size: 0.7rem; color: rgba(255,255,255,0.6);">
+                                <span>Auth Fail Impact</span>
+                                <span class="fw-bold text-white">{{ data.risk_breakdown.failed_auth_pct }}%</span>
+                            </div>
+                            <div class="progress"
+                                style="height: 4px; background: rgba(0,0,0,0.3); border-radius: 10px;">
+                                <div class="progress-bar" role="progressbar" style="width: {{ data.risk_breakdown.failed_auth_pct }}%; 
+                                background-color: {{ text_color }}; 
+                                box-shadow: 0 0 10px {{ text_color }};">
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="text-center small mt-2" style="color: rgba(255,255,255,0.5);">System metrics
+                                analyzing...</div>
+                            {% endif %}
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6" style="height: 290px; flex:1.6;">
+                <div class="card h-100 cyber-card glass-panel">
+                    <div
+                        class="card-header border-0 bg-transparent py-3 d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-bolt me-2" style="color: #ff0055; font-size: 0.9rem;"></i>
+                            <span class="fw-bold text-uppercase"
+                                style="color: #94a3b8; font-size: 0.75rem; letter-spacing: 0.5px;">
+                                ANOMALIES
+                            </span>
+                        </div>
+
+                        <span class="badge rounded-pill"
+                            style="background-color: rgba(255, 0, 85, 0.1); color: #ff0055; border: 1px solid rgba(255, 0, 85, 0.2); font-size: 0.65rem;">
+                            {{ data.alerts|length }} ANOMALIES
+                        </span>
+                    </div>
+                    <div class="card-body p-0 custom-scroll" style="overflow-y: auto;">
+                        {% if data.alerts %}
+                        <ul class="list-group list-group-flush bg-transparent">
+                            {% for alert in data.alerts %}
+                            <li class="list-group-item bg-transparent border-bottom border-secondary border-opacity-10 py-3 px-3"
+                                id="alert-card-{{ alert.id }}">
+
+                                <div class="d-flex align-items-start">
+
+                                    <div class="me-3 mt-1">
+                                        {% if alert.level == 'CRITICAL' %}
+                                        <i class="fas fa-exclamation-triangle"
+                                            style="color: #ff0055; font-size: 1rem;"></i>
+                                        {% elif alert.level == 'WARNING' %}
+                                        <i class="fas fa-shield-alt" style="color: #ffcc00; font-size: 1rem;"></i>
+                                        {% else %}
+                                        <i class="fas fa-info-circle" style="color: #0dcaf0; font-size: 1rem;"></i>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="flex-grow-1 me-2" style="min-width: 0;">
+                                        {% set parts = alert.title.split(':', 1) %}
+
+                                        <h6 class="mb-1 fw-bold text-white text-truncate" style="font-size: 0.8rem;">
+                                            {{ parts[0] }}
+                                        </h6>
+                                        <p class="mb-0 text-truncate"
+                                            style="color: #94a3b8; font-size: 0.7rem; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                            {% if parts|length > 1 %}
+                                                {{ parts[1] }} 
+                                            {% else %}
+                                                {{ alert.description }}
+                                            {% endif %}
+                                        </p>
+                                        <div id="raw-details-{{ alert.id }}" style="display:none;">
+                                            {{ alert.details if alert.details else "No details." }}
+
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex align-items-center gap-1">
+
+                                        <button class="btn btn-sm p-1 d-flex justify-content-center align-items-center"
+                                            onclick="openDetailModal({{ alert.id }})"
+                                            style="width: 24px; height: 24px; border: 1px solid rgba(14, 165, 233, 0.3); background: rgba(14, 165, 233, 0.1); color: #38bdf8; font-size: 0.75rem;">
+                                            <i class="fas fa-code"></i>
+                                        </button>
+
+                                        <button class="btn btn-sm p-1 d-flex justify-content-center align-items-center"
+                                            onclick="resolveAlert({{ alert.id }})"
+                                            style="width: 24px; height: 24px; border: 1px solid rgba(34, 197, 94, 0.3); background: rgba(34, 197, 94, 0.1); color: #4ade80; font-size: 0.75rem;">
+                                            <i class="fas fa-check"></i>
+                                        </button>
+
+                                        <small class="fw-bold"
+                                            style="color: #64748b; font-size: 0.6rem; white-space: nowrap;">
+                                            {{ alert.timestamp.split('.')[0] }}
+                                        </small>
+
+                                    </div>
+
+
+
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}
+                        <div
+                            class="d-flex flex-column justify-content-center align-items-center h-100 text-center pb-3 pt-5">
+                            <div
+                                style="width: 50px; height: 50px; border-radius: 50%; background: rgba(0, 255, 136, 0.05); display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
+                                <i class="fas fa-check" style="font-size: 1.2rem; color: #00ff88;"></i>
+                            </div>
+                            <h6 class="fw-bold text-white mb-0" style="font-size: 0.8rem;">System Clean</h6>
+                            <small style="color: #64748b; font-size: 0.65rem;">No anomalies detected.</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3" style="height: 290px; flex:1.2;">
+                <div class="card h-100 border-0 glass-panel">
+                    <div
+                        class="card-header border-0 bg-transparent py-3 d-flex justify-content-between align-items-center">
+                        <span class="text-uppercase fw-bold"
+                            style="color: #94a3b8; letter-spacing: 1px; font-size: 0.7rem;">
+                            <i class="fas fa-microchip me-2"></i> Active Processes
+                        </span>
+                        <span class="badge"
+                            style="background: rgba(255,255,255,0.05); color: #94a3b8; font-size: 0.6rem;">Top 8</span>
+                    </div>
+
+                    <div class="card-body p-2 custom-scroll" style="overflow-y: auto;">
+                        <div id="live-process-list" class="d-flex flex-column">
+                            {% for i in range(8) %}
+                            {% if analytics.top_processes and i < analytics.top_processes|length %} {% set
+                                proc=analytics.top_processes[i] %} {% set user_class='proc-user' %} {% if
+                                proc.username=='root' %} {% set user_class='proc-root' %} {% elif proc.username in
+                                ['system', 'network' , 'dbus' ] %} {% set user_class='proc-sys' %} {% endif %} {% set
+                                bar_color='#22c55e' %} {% set risk_badge='SAFE' %} {% set
+                                badge_bg='rgba(34, 197, 94, 0.1)' %} {% set badge_text='#22c55e' %} {% if
+                                proc.cpu_percent> 80 %}
+                                {% set bar_color = '#ef4444' %}
+                                {% set risk_badge = 'CRITICAL' %}
+                                {% set badge_bg = 'rgba(239, 68, 68, 0.2)' %}
+                                {% set badge_text = '#ef4444' %}
+                                {% elif proc.cpu_percent > 40 %}
+                                {% set bar_color = '#facc15' %}
+                                {% set risk_badge = 'WARN' %}
+                                {% set badge_bg = 'rgba(250, 204, 21, 0.1)' %}
+                                {% set badge_text = '#facc15' %}
+                                {% endif %}
+
+                                <div class="process-row">
+                                    <div class="d-flex align-items-center" style="width: 40%;">
+                                        <i class="fas fa-cog me-2 {{ user_class }}" style="font-size: 0.7rem;"></i>
+                                        <div>
+                                            <div class="fw-bold text-white text-truncate"
+                                                style="font-size: 0.75rem; max-width: 80px;">{{ proc.name }}</div>
+                                            <div class="font-monospace text-muted" style="font-size: 0.6rem;">{{
+                                                proc.pid }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-muted small text-truncate" style="width: 20%; font-size: 0.7rem;">
+                                        {{ proc.username }}</div>
+                                    <div style="width: 35%;">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <span class="fw-bold" style="color: {{ bar_color }}; font-size: 0.7rem;">{{
+                                                proc.cpu_percent }}%</span>
+                                            <span
+                                                style="background: {{ badge_bg }}; color: {{ badge_text }}; padding: 1px 4px; border-radius: 4px; font-size: 0.55rem; font-weight: bold;">{{
+                                                risk_badge }}</span>
+                                        </div>
+                                        <div class="cpu-track">
+                                            <div class="cpu-fill"
+                                                style="width: {{ proc.cpu_percent }}%; background-color: {{ bar_color }};">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="process-row" style="opacity: 0.3;">
+                                    <span class="text-muted small">-</span>
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3" style="height: 290px; flex:0.85;">
+                <div class="card h-80">
+                    <div class="card-header py-1" style="font-size: 0.7rem;">System Stats</div>
+                    <div class="card-body p-0 d-flex align-items-center">
+                        <div class="row w-100 m-0">
+
+                            <div class="col-4 border-end p-2 d-flex align-items-center justify-content-center">
+                                <i class="fas fa-microchip text-primary fs-4 me-2 opacity-75""></i>
+                                <div class=" lh-1">
+                                    <div class="fw-bold" id="live-cpu-text" style="font-size: 0.85rem;">%{{
+                                        data.metrics.cpu_usage }}</div>
+                                    <div class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">CPU</div>
+                            </div>
+                        </div>
+                        <div class="col-4 border-end p-2 d-flex align-items-center justify-content-center">
+                            <i class="fas fa-memory text-info fs-4 me-2 opacity-75"></i>
+                            <div class="lh-1">
+                                <div class="fw-bold" id="live-ram-text" style="font-size: 0.85rem;">%{{
+                                    data.metrics.ram_usage }}</div>
+                                <div class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">RAM</div>
+                            </div>
+                        </div>
+                        <div class="col-4 p-2 d-flex align-items-center justify-content-center">
+                            <i class="fas fa-hdd text-warning fs-4 me-2 opacity-75"></i>
+                            <div class="lh-1">
+                                <div class="fw-bold" style="font-size: 0.85rem;">%{{ data.metrics.disk_usage }}</div>
+                                <div class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">DISK</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+            <div class="card border-0 glass-panel" style="height: 200px; overflow: hidden;">
+                <div class="card-header border-0 bg-transparent py-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="text-uppercase fw-bold"
+                                style="color: #94a3b8; letter-spacing: 1px; font-size: 0.7rem;">
+                                <i class="fas fa-network-wired me-2"></i> Open Ports
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body pt-0 pb-2 px-2 custom-scroll" style="overflow-y: auto;">
+                    {% if data.metrics.port_list %}
+                    <div class="d-flex flex-column gap-1">
+                        {% for port in data.metrics.port_list %}
+                        <div class="port-item d-flex align-items-center justify-content-between px-1 py-1">
+                            <div class="d-flex align-items-center" style="min-width: 0;">
+                                <div class="me-2 text-center rounded p-1"
+                                    style="background: rgba(255, 255, 255, 0.05); min-width: 75px; flex-shrink: 0;">
+                                    <div class="fw-bold text-white font-monospace" style="font-size: 0.75rem;">{{
+                                        port.port }}</div>
+                                </div>
+                                <div style="min-width: 0; margin-right: 5px;">
+                                    <div class="text-uppercase fw-bold text-white text-truncate"
+                                        style="font-size: 0.7rem;">{{ port.service }}</div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center flex-shrink-0">
+                                <span class="text-success fw-bold me-1"
+                                    style="font-size: 0.75rem; letter-spacing: 0.5px; white-space: nowrap;">LISTEN</span>
+                                <span class="port-dot dot-green"></span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted"
+                        style="min-height: 180px;">
+                        <i class="fas fa-shield-alt fa-2x mb-2 opacity-25"></i>
+                        <span class="small">No open ports found.</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="diffModal" tabindex="-1" aria-hidden="true" style="z-index: 1060;">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content"
+                style="background-color: #0d1117; border: 1px solid #30363d; box-shadow: 0 0 50px rgba(0,0,0,0.9); border-radius: 8px;">
+
+                <div class="modal-header py-3" style="border-bottom: 1px solid #21262d; background-color: #161b22;">
+                    <div class="d-flex align-items-center w-100">
+                        <div class="me-3 d-flex align-items-center justify-content-center"
+                            style="width: 36px; height: 36px; background: rgba(56, 189, 248, 0.1); border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.3);">
+                            <i class="fas fa-terminal" style="color: #38bdf8; font-size: 1.1rem;"></i>
+                        </div>
+
+                        <div>
+                            <h5 class="modal-title fs-5 fw-bold text-white mb-0"
+                                style="font-family: 'Segoe UI', sans-serif; letter-spacing: 0.5px;">
+                                ANOMALY DETAILS PANEL
+                            </h5>
+                            <small style="color: #8b949e; font-size: 0.75rem;">Detected unauthorized file
+                                modifications</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-body p-0" style="background-color: #0d1117;">
+                    <div id="diffContent" class="p-4"
+                        style="font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 0.9rem; line-height: 1.5; color: #c9d1d9;">
+                    </div>
+                </div>
+
+                <div class="modal-footer py-2 px-3" style="border-top: 1px solid #21262d; background-color: #161b22;">
+                    <div class="d-flex align-items-center gap-3 me-auto">
+                        <span class="d-flex align-items-center gap-2"
+                            style="color: #2ea043; font-size: 0.75rem; font-family: monospace;">
+                            <span style="background-color: #2ea043; border-radius: 2px;"></span>
+                            + Added Lines
+                        </span>
+                        <span class="d-flex align-items-center gap-2"
+                            style="color: #da3633; font-size: 0.75rem; font-family: monospace;">
+                            <span style="background-color: #da3633; border-radius: 2px;"></span>
+                            - Removed Lines
+                        </span>
+                    </div>
+                    <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Close
+                        Viewer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        window.DashboardData = {
+            volumeLabels: {{ analytics.volume_labels | tojson | safe }},
+        volumeData: { { analytics.volume_data | tojson | safe } },
+        heatmapData: { { analytics.heatmap_data | tojson | safe } },
+        firewallStats: { { analytics.firewall_stats | tojson | safe } }
+            };
+    </script>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+
+</body>
+
+</html>

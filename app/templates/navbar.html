@@ -1,0 +1,58 @@
+    <nav class="navbar fixed-top navbar-expand-lg border-bottom py-2" style="background-color: var(--bs-body-bg);">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+                <i class="fas fa-shield-halved text-primary"></i>
+                <span>CronWatch <span class="badge bg-primary rounded-pill ms-1"
+                        style="font-size: 0.6em; vertical-align: top;">Your Local SIEM</span></span>
+            </a>
+
+            <div class="d-flex align-items-center ms-auto gap-3">
+
+                <div class="d-none d-lg-block text-end border-end pe-3 me-2">
+                    <div class="fw-bold text-body small mb-1">
+                        Welcome, {{ data.sys_info.hostname }}
+                    </div>
+
+                    <div class="text-muted d-flex align-items-center justify-content-end gap-2"
+                        style="font-size: 0.7rem;">
+
+                        <span class="d-flex align-items-center" title="Operating System">
+                            <i class="fab fa-linux me-1"></i>
+                            <span class="text-truncate" style="max-width: 350px;">{{ data.sys_info.os }}</span>
+                        </span>
+                    </div>
+                </div>
+                <div
+                    class="d-none d-xl-inline-flex align-items-center small border px-3 py-1 rounded-pill bg-body-secondary text-body shadow-sm">
+                    <div class="d-flex align-items-center me-2">
+                        {% if data.collector_status %}
+                        <span class="status-dot active"></span>
+                        <span class="fw-bold" style="font-size: 0.75rem; color: #28a745;">Collector Active</span>
+                        {% else %}
+                        <span class="status-dot inactive"></span>
+                        <span class="fw-bold" style="font-size: 0.75rem; color: #dc3545;">Collector Deactive</span>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-flex align-items-center border-start ps-2 me-2 text-muted">
+                        <span class="d-flex align-items-center" title="Local IP">
+                            <i class="fas fa-ethernet me-1"></i>
+                            <span class="font-monospace">{{ data.sys_info.ip_address }}</span>
+                        </span>
+                    </div>
+
+                    <div class="d-flex align-items-center border-start ps-2 me-2 text-muted" title="System Uptime">
+                        <i class="fas fa-clock me-1"></i>
+                        <span id="live-uptime">{{ data.sys_info.uptime }}</span>
+                    </div>
+
+                    <div class="d-flex align-items-center border-start ps-2 text-muted" title="Last Audit Scan Time">
+                        <i class="fas fa-sync-alt me-1"></i>
+                        <span> {{ data.last_scan }}</span>
+                    </div>
+
+                </div>
+                <a href="/logs" class="btn btn-sm btn-outline-primary" style="font-size: 0.75rem;">Log Explorer</a>
+            </div>
+        </div>
+    </nav>
