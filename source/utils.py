@@ -1,3 +1,5 @@
+# utils.py
+
 import os
 import psutil
 import subprocess
@@ -9,16 +11,24 @@ from pathlib import Path
 from typing import Final
 from datetime import datetime
 
-root = Path(__file__).resolve().parent.parent
-sys.path.append(str(root))
+try:
+    from config import Config
+except ImportError:
+    import sys
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    from config import Config
 
-from source import db
+try:
+    import db
+except ImportError:
+    from source import db
 
-CURRENT_DIR    : Final = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT   : Final = os.path.dirname(CURRENT_DIR)
-COLLECTOR_PATH : Final = os.path.join(PROJECT_ROOT, "source", "agent.py")
-CURSOR_FILE    : Final = os.path.join(PROJECT_ROOT, "source", "last_scan_cursor.txt")
-LOOKBACK_MINUTES = 30
+CURRENT_DIR    : Final = Config.SOURCE_DIR
+PROJECT_ROOT   : Final = Config.ROOT_DIR
+COLLECTOR_PATH : Final = os.path.join(Config.SOURCE_DIR, "agent.py")
+
+CURSOR_FILE    : Final = Config.CURSOR_FILE
+LOOKBACK_MINUTES = Config.LOOKBACK_MINUTES
 
 def is_root():
     if os.geteuid() != 0:
@@ -255,7 +265,6 @@ def collect_performance():
     print(f"[PERFORMANCE] CPU: %{cpu} | RAM: %{ram} | Disk: %{disk} | Ports: {open_ports_count}")
     
     return cpu, ram, disk, open_ports_count, port_details_json
-
 
 def calculate_file_hash(filepath):
     sha256_hash = hashlib.sha256()
