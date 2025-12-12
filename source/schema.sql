@@ -27,7 +27,10 @@ CREATE TABLE IF NOT EXISTS alerts (
     title TEXT,
     description TEXT,
     status TEXT DEFAULT 'OPEN',
-    details TEXT
+    details TEXT,
+    score INTEGER,
+    count INTEGER,
+    resolution_note TEXT
 );
 
 CREATE TABLE IF NOT EXISTS system_info (
@@ -57,6 +60,7 @@ CREATE TABLE IF NOT EXISTS file_integrity (
     uid INTEGER,
     gid INTEGER,
     inode INTEGER,
+    last_mtime REAL,
     last_checked DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
