@@ -1,3 +1,5 @@
+# agent.py
+
 import sys
 import os
 import time
@@ -13,24 +15,26 @@ import binascii
 import hashlib
 import difflib
 import utils
-
+import concurrent.futures
+import db
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 try:
-    import db
+    from config import Config
 except ImportError:
     sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    import db
+    from config import Config
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CURSOR_FILE = os.path.join(BASE_DIR, "last_scan_cursor.txt")
-LOOKBACK_MINUTES = 30
 
 def analyze_ssh_logs():
     failed_count = 0
     events = []
     
+    MAX_EVENTS = Config.SSH_MAX_EVENTS
+    BRUTE_FORCE_WINDOW = Config.SSH_BRUTE_FORCE_WINDOW
+    BRUTE_FORCE_THRESHOLD = Config.SSH_BRUTE_FORCE_THRESHOLD
+
     since_time = utils.get_since_timestamp()
 
     cmd = [
@@ -43,211 +47,252 @@ def analyze_ssh_logs():
     ]
     
     print(f"[LOG] Analyzing SSH logs since: {since_time}")
-    
-    BRUTE_FORCE_WINDOW = 300 
-    BRUTE_FORCE_THRESHOLD = 5
+    print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START --- analyze_ssh_logs ---\n")
 
     fail_tracker = defaultdict(deque)
-
-    try:
-        raw_output = subprocess.check_output(
-            cmd, stderr=subprocess.DEVNULL
-        ).decode('utf-8', errors='ignore')
-    except Exception as e:
-        print(f"[ERROR] Journalctl failed: {e}")
-        return 0, []
 
     rgx_ip = re.compile(r'from\s+([0-9a-fA-F:\.]+(?:%[a-zA-Z0-9]+)?)')
     rgx_user_fail = re.compile(r'for\s+(?:invalid user\s+)?([\w\.-]+)')
     rgx_user_succ = re.compile(r'for\s+([\w\.-]+)\s+from')
 
-    for line in raw_output.splitlines():
-        line = line.strip()
-        if not line:
-            continue
+    try:
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1) as proc:
+            
+            for line in proc.stdout:
+                if "password" not in line and "publickey" not in line:
+                    continue
 
-        try:
-            ts_str = line.split(' ')[0]
-            ts_str = ts_str.split('+')[0].split('.')[0]
-            current_ts = datetime.strptime(ts_str, "%Y-%m-%dT%H:%M:%S")
-        except:
-            current_ts = datetime.now()
-
-        if "Failed password" in line:
-            ip_match = rgx_ip.search(line)
-            user_match = rgx_user_fail.search(line)
-
-            src_ip = ip_match.group(1) if ip_match else "Unknown"
-            username = user_match.group(1) if user_match else "Unknown"
-
-            fail_tracker[src_ip].append(current_ts)
-
-            while fail_tracker[src_ip]:
-                if (current_ts - fail_tracker[src_ip][0]).total_seconds() > BRUTE_FORCE_WINDOW:
-                    fail_tracker[src_ip].popleft()
-                else:
+                if len(events) >= MAX_EVENTS:
                     break
 
-            recent_fails = len(fail_tracker[src_ip])
+                line = line.strip()
+                if not line: continue
 
-            severity = "WARNING"
-            msg = "Invalid SSH attempt"
+                try:
+                    ts_str = line.split()[0] 
+                    current_ts = datetime.fromisoformat(ts_str)
+                except:
+                    current_ts = datetime.now()
 
-            if recent_fails >= BRUTE_FORCE_THRESHOLD:
-                severity = "CRITICAL"
-                msg = f"Brute Force Detected ({recent_fails} attempts in 5min)"
+                if "Failed password" in line:
+                    ip_match = rgx_ip.search(line)
+                    user_match = rgx_user_fail.search(line)
 
-            events.append({
-                "type": "AUTH_FAILURE",
-                "source": src_ip,
-                "user": username,
-                "severity": severity,
-                "msg": f"{msg} at {ts_str}"
-            })
+                    src_ip = ip_match.group(1) if ip_match else "Unknown"
+                    username = user_match.group(1) if user_match else "Unknown"
 
-        elif "Accepted password" in line or "Accepted publickey" in line:
-            ip_match = rgx_ip.search(line)
-            user_match = rgx_user_succ.search(line)
+                    fail_tracker[src_ip].append(current_ts)
 
-            src_ip = ip_match.group(1) if ip_match else "Local"
-            username = user_match.group(1) if user_match else "Unknown"
+                    while fail_tracker[src_ip]:
+                        if (current_ts - fail_tracker[src_ip][0]).total_seconds() > BRUTE_FORCE_WINDOW:
+                            fail_tracker[src_ip].popleft()
+                        else:
+                            break
 
-            severity = "INFO"
-            msg = "Valid SSH login"
+                    recent_fails = len(fail_tracker[src_ip])
 
-            recent_fails = len(fail_tracker.get(src_ip, []))
+                    if recent_fails >= BRUTE_FORCE_THRESHOLD:
+                        severity = "CRITICAL"
+                        msg = f"Brute Force Detected ({recent_fails} attempts)"
+                        event_type = "SSH_BRUTE_FORCE"
+                    else:
+                        severity = "HIGH"
+                        msg = "Invalid SSH attempt"
+                        event_type = "SSH_AUTH_FAIL"
 
-            if recent_fails >= BRUTE_FORCE_THRESHOLD:
-                severity = "CRITICAL"
-                msg = "SUCCESSFUL LOGIN AFTER BRUTE FORCE ATTACK!"
-                fail_tracker[src_ip].clear()
+                    details_str = (
+                        f"Event Type: {event_type}\n"
+                        f"User: {username}\n"
+                        f"Source IP: {src_ip}\n"
+                        f"Protocol: SSH (Port 22)\n"
+                        f"Attempt Count: {recent_fails}\n"
+                        f"Analysis: {msg}\n"
+                    )
 
-            events.append({
-                "type": "AUTH_SUCCESS",
-                "source": src_ip,
-                "user": username,
-                "severity": severity,
-                "msg": f"{msg} at {ts_str}"
-            })
+                    events.append({
+                        "type": event_type,
+                        "source": src_ip,
+                        "user": username,
+                        "severity": severity,
+                        "msg": f"{msg} from {src_ip}",
+                        "details": details_str
+                    })
 
-    failed_count = sum(1 for e in events if e["type"] == "AUTH_FAILURE")
+                elif "Accepted password" in line or "Accepted publickey" in line:
+                    ip_match = rgx_ip.search(line)
+                    user_match = rgx_user_succ.search(line)
+
+                    src_ip = ip_match.group(1) if ip_match else "Local"
+                    username = user_match.group(1) if user_match else "Unknown"
+
+                    severity = "INFO"
+                    msg = "Valid SSH login"
+                    event_type = "SSH_AUTH_SUCCESS"
+
+                    recent_fails = len(fail_tracker.get(src_ip, []))
+                    if recent_fails >= BRUTE_FORCE_THRESHOLD:
+                        severity = "CRITICAL"
+                        msg = "SUCCESSFUL LOGIN AFTER BRUTE FORCE ATTACK!"
+                        event_type = "SSH_COMPROMISE"
+                        fail_tracker[src_ip].clear()
+
+                    details_str = (
+                        f"Event Type: {event_type}\n"
+                        f"User: {username}\n"
+                        f"Source IP: {src_ip}\n"
+                        f"Protocol: SSH\n"
+                        f"Analysis: Access granted.\n"
+                    )
+
+                    events.append({
+                        "type": event_type,
+                        "source": src_ip,
+                        "user": username,
+                        "severity": severity,
+                        "msg": f"{msg} for {username}",
+                        "details": details_str
+                    })
+
+    except Exception as e:
+        print(f"[ERROR] SSH Log Processing Failed: {e}")
+        return 0, []
+
+    failed_count = sum(1 for e in events if "FAIL" in e["type"] or "BRUTE" in e["type"])
     
     return failed_count, events
 
 def analyze_sudo_logs():
     events = []
+    
+    MAX_EVENTS = Config.SUDO_MAX_EVENTS
+    SENSITIVE_FILES = Config.SUDO_SENSITIVE_FILES
+    NORMAL_COOLDOWN = Config.SUDO_NORMAL_COOLDOWN
+    CRITICAL_COOLDOWN = Config.SUDO_CRITICAL_COOLDOWN
     since_time = utils.get_since_timestamp()
     
     cmd = ["journalctl", "-t", "sudo", "--since", since_time, "--no-pager", "--output=short-iso"]
     
-    print(f"[LOG] Analyzing SUDO commands (Context-Aware) since: {since_time}")
-    
-    last_sudo_map = defaultdict(lambda: datetime.min)
-    
-    NORMAL_COOLDOWN = 10
-    CRITICAL_COOLDOWN = 2
+    print(f"[LOG] Analyzing SUDO commands (High Performance Mode) since: {since_time}")
+    print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START --- analyze_sudo_logs ---")
 
-    try:
-        raw_output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode('utf-8', errors='ignore')
-    except Exception as e:
-        print(f"[ERROR] Journalctl error: {e}")
-        return []
+    last_sudo_map = defaultdict(lambda: datetime.min)
 
     rgx_meta = re.compile(r'sudo\[(\d+)\]:\s+(\S+)\s+:')
-    rgx_command = re.compile(r'COMMAND=(.+)$')
     
-    rgx_sensitive = re.compile(r'(/etc/shadow|/etc/passwd|/etc/sudoers|\.ssh/id_rsa|\.bash_history)')
+    gtfobins_risky = {'find', 'awk', 'nmap', 'man', 'less', 'more', 'vi', 'vim', 'gdb', 'tar', 'zip'}
+    priv_escalation_bins = {'chmod', 'chown', 'chgrp', 'passwd', 'useradd', 'usermod'}
+    shell_bins = {'bash', 'sh', 'zsh', 'su'}
+    net_bins = {'wget', 'curl', 'nc', 'netcat', 'socat'}
+    read_bins = {'cat', 'head', 'tail', 'grep', 'more', 'less'}
 
-    for line in raw_output.splitlines():
-        line = line.strip()
-        if not line or "COMMAND=" not in line: continue
+    try:
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1) as proc:
+            
+            for line in proc.stdout:
+                
+                if "COMMAND=" not in line:
+                    continue
 
-        try:
-            ts_str = line.split(' ')[0][:19]
-            current_ts = datetime.strptime(ts_str, '%Y-%m-%dT%H:%M:%S')
-        except:
-            current_ts = datetime.now()
+                if len(events) >= MAX_EVENTS:
+                    break
 
-        meta_match = rgx_meta.search(line)
-        cmd_match = rgx_command.search(line)
-        
-        pid = meta_match.group(1) if meta_match else "N/A"
-        user = meta_match.group(2).strip() if meta_match else "unknown"
-        full_command = cmd_match.group(1).strip() if cmd_match else "unknown"
-        
-        parts = full_command.split()
-        binary = parts[0]
-        if "/" in binary:
-            binary = binary.split("/")[-1]
-        
-        args = " ".join(parts[1:]) 
+                if len(last_sudo_map) > 5000:
+                    last_sudo_map.clear()
 
-        severity = "INFO"
-        tags = []
-        
-        gtfobins_risky = ['find', 'awk', 'nmap', 'man', 'less', 'more', 'vi', 'vim', 'gdb', 'tar', 'zip']
-        
-        if binary in gtfobins_risky:
-            if any(x in args for x in ['-exec', 'system', 'spawn', '!/bin/sh', '--interactive']):
-                severity = "CRITICAL"
-                tags.append("SHELL_ESCAPE_ATTEMPT")
-            elif binary in ['vi', 'vim']:
-                if rgx_sensitive.search(args):
+                line = line.strip()
+
+                try:
+                    ts_str = line.split()[0]
+                    current_ts = datetime.fromisoformat(ts_str).replace(tzinfo=None)
+                except:
+                    current_ts = datetime.now().replace(tzinfo=None)
+
+                meta_match = rgx_meta.search(line)
+                
+                try:
+                    cmd_part = line.split("COMMAND=", 1)[1].strip()
+                except IndexError:
+                    continue
+
+                pid = meta_match.group(1) if meta_match else "N/A"
+                user = meta_match.group(2).strip() if meta_match else "unknown"
+                full_command = cmd_part
+                
+                parts = full_command.split()
+                if not parts: continue
+                
+                binary = parts[0]
+                if "/" in binary: binary = binary.split("/")[-1]
+                
+                args = " ".join(parts[1:]) 
+
+                severity = "INFO"
+                event_type = "GENERAL_SUDO"
+
+                if binary in gtfobins_risky and any(x in args for x in ['-exec', 'system', 'spawn', '!/bin/sh', '--interactive']):
                     severity = "CRITICAL"
-                    tags.append("SENSITIVE_EDIT")
-                else:
-                    severity = "HIGH" 
-                    tags.append("UNSAFE_EDITOR")
-            else:
-                severity = "INFO"
-                tags.append("SYSTEM_TOOL")
+                    event_type = "SHELL_ESCAPE_ATTEMPT"
+                
+                elif binary in ['vi', 'vim', 'nano'] and any(s in args for s in SENSITIVE_FILES):
+                    severity = "CRITICAL"
+                    event_type = "SENSITIVE_EDIT"
+                
+                elif binary in shell_bins:
+                    severity = "CRITICAL"
+                    event_type = "DIRECT_SHELL_ACCESS"
 
-        elif binary in ['bash', 'sh', 'zsh', 'su']:
-            severity = "CRITICAL"
-            tags.append("DIRECT_SHELL_ACCESS")
+                elif binary in read_bins and any(s in args for s in SENSITIVE_FILES):
+                    severity = "CRITICAL"
+                    event_type = "SENSITIVE_READ"
 
-        elif binary in ['cat', 'head', 'tail', 'grep']:
-            if rgx_sensitive.search(args):
-                severity = "CRITICAL"
-                tags.append("SENSITIVE_READ")
-            elif "/root/" in args:
-                severity = "WARNING" 
-                tags.append("ROOT_DIR_ACCESS")
-            else:
-                severity = "INFO"
-                tags.append("FILE_READ")
+                elif binary in priv_escalation_bins:
+                    severity = "HIGH"
+                    event_type = "PRIVILEGE_MODIFICATION"
 
-        elif binary in ['rm', 'dd', 'mkfs', 'fdisk', 'shred']:
-            severity = "WARNING"
-            tags.append("DESTRUCTIVE_OP")
+                elif binary in ['vi', 'vim', 'nano']:
+                    severity = "HIGH"
+                    event_type = "UNSAFE_EDITOR"
 
-        elif binary in ['wget', 'curl', 'nc', 'netcat', 'socat']:
-            severity = "HIGH"
-            tags.append("NETWORK_TOOL")
-        elif binary in ['passwd', 'useradd', 'usermod', 'chmod', 'chown']:
-            severity = "WARNING"
-            tags.append("PRIVILEGE_MOD")
+                elif binary in net_bins:
+                    severity = "HIGH"
+                    event_type = "NETWORK_TOOL"
+                
+                elif "/root/" in args:
+                    severity = "WARNING"
+                    event_type = "ROOT_DIR_ACCESS"
 
-        if not tags:
-            tags.append("GENERAL_SUDO")
+                elif binary in ['rm', 'dd', 'mkfs', 'fdisk', 'shred']:
+                    severity = "WARNING"
+                    event_type = "DESTRUCTIVE_OP"
 
-        wait_time = CRITICAL_COOLDOWN if severity == "CRITICAL" else NORMAL_COOLDOWN
-        
-        cooldown_key = (user, full_command)
-        
-        if (current_ts - last_sudo_map[cooldown_key]).total_seconds() < wait_time:
-            continue
-        
-        last_sudo_map[cooldown_key] = current_ts
+                wait_time = CRITICAL_COOLDOWN if severity == "CRITICAL" else NORMAL_COOLDOWN
+                cooldown_key = (user, full_command)
+                
+                if (current_ts - last_sudo_map[cooldown_key]).total_seconds() < wait_time:
+                    continue
+                last_sudo_map[cooldown_key] = current_ts
 
-        msg_prefix = " + ".join(tags)
-        events.append({
-            "type": "SUDO_EXEC",
-            "source": "Local",
-            "user": user,
-            "severity": severity,
-            "msg": f"[{msg_prefix}] (PID:{pid}): {full_command}"
-        })
+                details_str = (
+                    f"Event Type: {event_type}\n"
+                    f"User: {user}\n"
+                    f"Command: {full_command}\n"
+                    f"PID: {pid}\n"
+                    f"Binary: {binary}\n"
+                    f"Severity: {severity}\n"
+                )
+
+                events.append({
+                    "type": event_type,
+                    "source": "Local",
+                    "user": user,
+                    "severity": severity,
+                    "msg": f"[{event_type}] {full_command}",
+                    "details": details_str
+                })
+
+    except Exception as e:
+        print(f"[ERROR] Sudo Log Processing Failed: {e}")
+        return []
 
     return events
 
@@ -255,13 +300,13 @@ def analyze_audit_logs():
     events = []
     
     if shutil.which("ausearch") is None:
+        print("[ERROR] 'ausearch' komutu bulunamadı. Auditd yüklü mü?")
         return events
 
-    start_time = (datetime.now() - timedelta(minutes=LOOKBACK_MINUTES + 1)).strftime("%H:%M:%S")
-    
-    cmd = ["ausearch", "-ts", start_time, "-i", "--input-logs"]
+    cmd = ["ausearch", "-k", "process_monitor", "-i", "-ts", "recent"]
 
-    print(f"[LOG] Auditd logları analiz ediliyor ({start_time} tarihinden beri)...")
+    print(f"[LOG] Auditd logları analiz ediliyor (Process Monitor)...")
+    print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START --- analyze_audit_logs ---\n") # <-- ADD THIS LINE
 
     rgx_exe = re.compile(r'exe="([^"]+)"')
     rgx_cmd = re.compile(r'proctitle="?([^"]+)"?') 
@@ -283,10 +328,15 @@ def analyze_audit_logs():
     
     recon_regex = re.compile(r'\b(whoami|id|uname -a|cat /etc/issue)\b')
     
+    perm_mod_regex = re.compile(r'\b(chmod|chown|chgrp)\b')
+    
     critical_files = {'/etc/shadow', '/etc/passwd', '/etc/sudoers', '/var/log/auth.log'}
 
     try:
         raw_output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode('utf-8', errors='ignore')
+        
+        if len(raw_output) < 10:
+            print("[DEBUG] Auditd log çıktısı boş veya çok kısa.")
         
         dedup_map = {}
 
@@ -294,7 +344,7 @@ def analyze_audit_logs():
             line = line.strip()
             if not line: continue
             
-            if "type=EXECVE" in line or "type=SYSCALL" in line:
+            if "type=SYSCALL" in line or "type=EXECVE" in line:
                 
                 exe_match = rgx_exe.search(line)
                 cmd_match = rgx_cmd.search(line)
@@ -317,7 +367,7 @@ def analyze_audit_logs():
                 auid = auid_match.group(1) if auid_match else "unset"
                 uid = uid_match.group(1) if uid_match else "unset"
 
-                if "collector.py" in full_cmd or "ausearch" in full_cmd:
+                if "collector.py" in full_cmd or "ausearch" in full_cmd or "agent.py" in full_cmd:
                     continue
 
                 risk_score = 1
@@ -339,6 +389,11 @@ def analyze_audit_logs():
                     if risk_score < 3: alert_type = "RECONNAISSANCE"
                     details.append("Enumeration Command")
 
+                elif perm_mod_regex.search(full_cmd):
+                    risk_score = max(risk_score, 3)
+                    alert_type = "PERM_MODIFICATION"
+                    details.append("Critical Permission/Ownership Change")
+
                 if "rm " in full_cmd and "/var/log" in full_cmd:
                     risk_score = max(risk_score, 4)
                     alert_type = "LOG_WIPING"
@@ -350,7 +405,7 @@ def analyze_audit_logs():
                     details.append(f"User {auid} became ROOT")
 
                 severity_map = {1: "INFO", 2: "WARNING", 3: "HIGH", 4: "CRITICAL"}
-                severity = severity_map[risk_score]
+                severity = severity_map.get(risk_score, "INFO")
                 
                 msg_body = f"{alert_type}: {full_cmd}"
                 if details:
@@ -363,7 +418,8 @@ def analyze_audit_logs():
                     "source": "Auditd",
                     "user": f"{auid}->{uid}",
                     "severity": severity,
-                    "msg": msg_body
+                    "msg": msg_body,
+                    "details": "\n".join(details) if details else "Process execution logged via Auditd"
                 }
 
             elif "type=PATH" in line:
@@ -376,24 +432,35 @@ def analyze_audit_logs():
                             "source": "Auditd",
                             "user": "kernel",
                             "severity": "HIGH",
-                            "msg": f"Critical File Access: {filename}"
+                            "msg": f"Critical File Access: {filename}",
+                            "details": f"Direct file access detected by kernel audit.\nFile: {filename}"
                         }
 
         events = list(dedup_map.values())
 
+    except subprocess.CalledProcessError as e:
+        if e.returncode == 1:
+            return [] 
+        print(f"[ERROR] Auditd komut hatası: {e}")
+        return []
+        
     except Exception as e:
-        print(f"[ERROR] Auditd analiz hatası: {e}")
+        print(f"[ERROR] Auditd genel hata: {e}")
+        return []
 
     return events
 
 def analyze_file_integrity():
     events = []
     
-    CRITICAL_FILES = ["/etc/passwd", "/etc/shadow", "/etc/group", "/etc/sudoers", "/etc/ssh/sshd_config", "/etc/hosts", "/bin/ls", "/usr/bin/python3", "/home/zgr/Documents/siem_test.txt"]
-    SAFE_CHANGES = ["/etc/hosts", "/etc/resolv.conf"]
-    MAX_FILE_SIZE = 5 * 1024 * 1024 
+    CRITICAL_FILES = Config.FIM_TARGETS
+    SAFE_CHANGES = Config.FIM_SAFE_CHANGES
+    MAX_FILE_SIZE = Config.FIM_MAX_FILE_SIZE
 
     print("[LOG] FIM (File Integrity Monitoring) scanning...")
+    print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START --- analyze_fim_logs ---\n")
+
+    start_time = time.time()
 
     for filepath in CRITICAL_FILES:
         event_time = datetime.now(timezone.utc).isoformat()
@@ -403,42 +470,51 @@ def analyze_file_integrity():
             
             if stored_data:
                 old_inode = stored_data['inode']
-
                 new_path = utils.find_renamed_file(old_inode) 
                 
                 if new_path:
                     old_dir, old_name = os.path.split(filepath)
                     new_dir, new_name = os.path.split(new_path)
                     
-                    msg = ""
-                    event_type = ""
-                    status_desc = ""
+                    try:
+                        new_stat = os.stat(new_path)
+                        new_uid = new_stat.st_uid
+                        new_gid = new_stat.st_gid
+                        new_perms = oct(new_stat.st_mode)[-3:]
+                    except:
+                        new_uid, new_gid, new_perms = "Unknown", "Unknown", "Unknown"
+
+                    new_hash = "Unknown"
+                    try:
+                        sha256_hash = hashlib.sha256()
+                        with open(new_path, "rb") as f:
+                            for byte_block in iter(lambda: f.read(4096), b""):
+                                sha256_hash.update(byte_block)
+                        new_hash = sha256_hash.hexdigest()
+                    except Exception as e:
+                        print(f"[ERROR] Hash calculation failed during rename check: {e}")
+
+                    event_type = "FIM_TRACKING"
+                    status_desc = "Inode match found."
 
                     if old_dir == new_dir and old_name != new_name:
-                        msg = f"FILE RENAMED (Local): {old_name} -> {new_name}"
+                        msg = f"FILE RENAMED: {old_name} -> {new_name}"
                         event_type = "FIM_RENAME"
-                        status_desc = "File renamed within the same directory."
-
-                    elif old_dir != new_dir and old_name == new_name:
-                        msg = f"FILE MOVED: {old_dir} -> {new_dir}"
+                    elif old_dir != new_dir:
+                        msg = f"FILE MOVED: {filepath} -> {new_path}"
                         event_type = "FIM_MOVED"
-                        status_desc = "File moved to a different directory (Name preserved)."
-
-                    elif old_dir != new_dir and old_name != new_name:
-                        msg = f"FILE MOVED & RENAMED: {filepath} -> {new_path}"
-                        event_type = "FIM_MOVED_RENAMED"
-                        status_desc = "File moved to a different directory AND renamed."
-                    
-                    else:
-                        msg = f"FILE TRACKED: {new_path}"
-                        event_type = "FIM_TRACKING"
-                        status_desc = "Inode match found."
 
                     details_str = (
                         f"Event Type: {event_type}\n"
                         f"Original Path: {filepath}\n"
                         f"New Path: {new_path}\n"
                         f"Inode: {old_inode} (Preserved)\n"
+                        f"UID: {new_uid}\n"        
+                        f"GID: {new_gid}\n"        
+                        f"Old Permissions: {stored_data['perms']}\n"  
+                        f"New Permissions: {new_perms}\n"             
+                        f"Old Hash: {stored_data['hash']}\n"          
+                        f"New Hash: {new_hash}\n"                     
                         f"Analysis: {status_desc}"
                     )
                     
@@ -447,22 +523,28 @@ def analyze_file_integrity():
                         "user": "System", "severity": "HIGH", "msg": msg, "details": details_str
                     })
                     
-                    # db.insert_alert("HIGH", msg, status_desc, details_str)
-
                 else:
                     msg = f"CRITICAL FILE MISSING: {filepath}"
+
+                    last_uid = stored_data.get('uid', 'N/A')
+                    last_gid = stored_data.get('gid', 'N/A')
+                    last_perms = stored_data.get('permissions', 'N/A')
+                    if last_perms == 'N/A': 
+                        last_perms = stored_data.get('perms', 'N/A')
+
                     details_str = (
-                        f"Event: File Deletion\n"
-                        f"Path: {filepath}\n"
-                        f"Last Inode: {old_inode}\n"
-                        f"Action: Removed from disk (Not found in scan)"
+                        f"Event Type: FIM_MISSING\n"
+                        f"Original Path: {filepath}\n"
+                        f"Inode: {old_inode}\n"            
+                        f"UID: {last_uid}\n"               
+                        f"GID: {last_gid}\n"               
+                        f"Old Permissions: {last_perms}\n" 
+                        f"Analysis: File has been permanently removed from disk.\n"
                     )
                     events.append({
                         "timestamp": event_time, "type": "FIM_MISSING", "source": "Local/FIM",
                         "user": "System", "severity": "CRITICAL", "msg": msg, "details": details_str
                     })
-                    
-                    # db.insert_alert("CRITICAL", msg, "File deleted completely", details_str)
             continue
 
         try:
@@ -471,7 +553,17 @@ def analyze_file_integrity():
             current_uid = file_stat.st_uid
             current_gid = file_stat.st_gid
             current_inode = file_stat.st_ino
+            current_mtime = file_stat.st_mtime
             
+            stored_data = db.get_file_baseline(filepath)
+
+            if  stored_data and stored_data['inode'] == current_inode and stored_data.get('mtime') == current_mtime and stored_data.get('perms') == current_perms and stored_data.get('uid') == current_uid and stored_data.get('gid') == current_gid:        
+
+                print(f"   [FAST SKIP] {filepath} (No changes)") 
+                continue
+
+            print(f"   [HEAVY SCAN] {filepath} (Calculating Hash...)")
+
             sha256_hash = hashlib.sha256()
             with open(filepath, "rb") as f:
                 for byte_block in iter(lambda: f.read(4096), b""):
@@ -491,10 +583,8 @@ def analyze_file_integrity():
                     current_content = "[INFO] Binary"
                     is_binary_or_large = True
 
-            stored_data = db.get_file_baseline(filepath)
-
             if stored_data is None:
-                db.update_file_baseline(filepath, current_hash, current_content, current_perms, current_uid, current_gid, current_inode)
+                db.update_file_baseline(filepath, current_hash, current_content, current_perms, current_uid, current_gid, current_inode, current_mtime)
                 continue
 
             base_severity = "CRITICAL"
@@ -502,64 +592,88 @@ def analyze_file_integrity():
 
             if stored_data['inode'] != current_inode:
                 msg = f"FILE REPLACEMENT DETECTED: {filepath}"
-                details = f"Old Inode: {stored_data['inode']} -> New: {current_inode}\n(File was deleted and recreated)"
-                
+                details_str = (
+                    f"Event Type: FIM_INODE_CHANGE\n"
+                    f"Original Path: {filepath}\n"
+                    f"UID: {current_uid}\n"        
+                    f"GID: {current_gid}\n"        
+                    f"Old Inode: {stored_data['inode']}\n" 
+                    f"New Inode: {current_inode}\n"       
+                    f"Old Permissions: {stored_data['perms']}\n"
+                    f"New Permissions: {current_perms}\n"
+                    f"Analysis: File deleted and recreated (Inode mismatch).\n"
+                )
                 events.append({
                     "timestamp": event_time, "type": "FIM_INODE_CHANGE", "source": "Local/FIM",
-                    "user": "System", "severity": base_severity, "msg": msg, "details": details
+                    "user": "System", "severity": base_severity, "msg": msg, "details": details_str
                 })
-                
-                # if base_severity in ["CRITICAL", "HIGH"]:
-                    # db.insert_alert(base_severity, msg, "Inode replacement detected", details)
-                
-                db.update_file_baseline(filepath, current_hash, current_content, current_perms, current_uid, current_gid, current_inode)
+                db.update_file_baseline(filepath, current_hash, current_content, current_perms, current_uid, current_gid, current_inode, current_mtime)
 
             elif current_hash != stored_data['hash']:
                 msg = f"FILE CONTENT CHANGED: {filepath}"
-                diff_text = ""
-
+                
+                diff_output = "No readable text diff available."
                 if not is_binary_or_large:
                     old_content = stored_data['content'] if stored_data['content'] else ""
                     diff = list(difflib.unified_diff(
                         old_content.splitlines(), current_content.splitlines(), 
-                        lineterm='', fromfile='Original', tofile='Current', n=3
+                        lineterm='', n=3
                     ))
-                    diff_text = "\n".join(diff[2:]) if len(diff) > 2 else ""
-                else:
-                    diff_text = f"Binary/Large File. Old Hash: {stored_data['hash']}"
+                    if len(diff) > 2:
+                        diff_output = "\n".join(diff[2:])
+
+                details_str = (
+                    f"Event Type: FIM_CONTENT_CHANGE\n"
+                    f"Original Path: {filepath}\n"
+                    f"UID: {current_uid}\n"
+                    f"GID: {current_gid}\n"
+                    f"Inode: {current_inode}\n"                 
+                    f"Old Permissions: {stored_data['perms']}\n"  
+                    f"New Permissions: {current_perms}\n"        
+                    f"Old Hash: {stored_data['hash']}\n"
+                    f"New Hash: {current_hash}\n"
+                    f"Analysis: File content modified.\n"
+                    f"---DIFF START---\n{diff_output}\n---DIFF END---"
+                )
 
                 events.append({
                     "timestamp": event_time, "type": "FIM_CONTENT_CHANGE", "source": "Local/FIM",
-                    "user": "System", "severity": base_severity, "msg": msg, "details": diff_text
+                    "user": "System", "severity": base_severity, "msg": msg, "details": details_str
                 })
-                
-                # if base_severity in ["CRITICAL", "HIGH"]:
-                    # print(f"   >>> FIM ALERT SAVED: {filepath}")
-                    # db.insert_alert(base_severity, msg, f"Unauthorized content change on {filepath}", diff_text)
-                
-                db.update_file_baseline(filepath, current_hash, current_content, current_perms, current_uid, current_gid, current_inode)
+                db.update_file_baseline(filepath, current_hash, current_content, current_perms, current_uid, current_gid, current_inode, current_mtime)
 
             elif (current_perms != stored_data['perms'] or current_uid != stored_data['uid'] or current_gid != stored_data['gid']):
-                details_list = []
-                if current_perms != stored_data['perms']: details_list.append(f"Perms: {stored_data['perms']} -> {current_perms}")
-                if current_uid != stored_data['uid']: details_list.append(f"UID: {stored_data['uid']} -> {current_uid}")
-                if current_gid != stored_data['gid']: details_list.append(f"GID: {stored_data['gid']} -> {current_gid}")
                 
-                details_str = "\n".join(details_list)
                 msg = f"FILE METADATA CHANGED: {filepath}"
+                
+                details_str = (
+                    f"Event Type: FIM_METADATA_CHANGE\n"
+                    f"Original Path: {filepath}\n"
+                    f"UID: {current_uid} (Old: {stored_data['uid']})\n"
+                    f"GID: {current_gid} (Old: {stored_data['gid']})\n"
+                    f"Inode: {current_inode}\n"
+                    f"Old Permissions: {stored_data['perms']}\n"
+                    f"New Permissions: {current_perms}\n"
+                    f"Old Hash: {stored_data['hash']}\n"
+                    f"New Hash: {current_hash}\n"
+                    f"Analysis: Ownership or permissions modified.\n"
+                )
                 
                 events.append({
                     "timestamp": event_time, "type": "FIM_PERM_CHANGE", "source": "Local/FIM",
                     "user": "System", "severity": "WARNING", "msg": msg, "details": details_str
                 })
 
-                # db.insert_alert("WARNING", msg, "Metadata/Permission change", details_str)
-                
-                db.update_file_baseline(filepath, current_hash, current_content, current_perms, current_uid, current_gid, current_inode)
+                db.update_file_baseline(filepath, current_hash, current_content, current_perms, current_uid, current_gid, current_inode, current_mtime)
 
         except Exception as e:
             print(f"[ERROR] FIM check failed for {filepath}: {e}")
 
+
+    end_time = time.time()
+    duration = end_time - start_time
+    print(f"[RESULT] FIM Scan Completed in {duration:.4f} seconds.\n")
+    
     return events
 
 def analyze_firewall_logs():
@@ -568,12 +682,11 @@ def analyze_firewall_logs():
     
     cmd = f"journalctl -k --since '{since_time}' --no-pager --output=short-iso"
     
-    critical_ports = {'22','23','53','80','443','445','1433','3306','3389'}
-    
-    TIME_WINDOW = 30 
-    HIT_THRESHOLD = 20 
-    UNIQUE_PORT_THRESHOLD = 5
-    COOLDOWN = 60
+    critical_ports = Config.FW_CRITICAL_PORTS
+    TIME_WINDOW = Config.FW_TIME_WINDOW
+    HIT_THRESHOLD = Config.FW_HIT_THRESHOLD
+    UNIQUE_PORT_THRESHOLD = Config.FW_UNIQUE_PORT_THRESHOLD
+    COOLDOWN = Config.FW_COOLDOWN
 
     patterns = {
         'src': re.compile(r'SRC=([0-9a-fA-F:\.]+)'),
@@ -737,16 +850,64 @@ def run():
     utils.collect_system_status()
     
     cpu, ram, disk, ports, port_details = utils.collect_performance()
-    
-    failed_logins, ssh_events = analyze_ssh_logs()
-    sudo_events = analyze_sudo_logs()
-    audit_events = analyze_audit_logs()
-    firewall_events = analyze_firewall_logs() 
-    fim_events = analyze_file_integrity() 
 
+    failed_logins = 0
+    ssh_events = []
+    sudo_events = []
+    firewall_events = []
+    fim_events = []
+    audit_events = []
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        print("[LOG] Starting parallel log analysis...")
+        
+        future_ssh = executor.submit(analyze_ssh_logs)
+        future_sudo = executor.submit(analyze_sudo_logs)
+        future_firewall = executor.submit(analyze_firewall_logs)
+        future_fim = executor.submit(analyze_file_integrity)
+        future_audit = executor.submit(analyze_audit_logs)
+
+        try:
+            failed_logins, ssh_events = future_ssh.result()
+            print(f"[RESULT] SSH analysis complete. Found {len(ssh_events)} events.")
+        except Exception as e:
+            print(f"[ERROR] The SSH analysis task failed: {e}")
+
+        try:
+            sudo_events = future_sudo.result()
+            print(f"[RESULT] Sudo analysis complete. Found {len(sudo_events)} events.")
+        except Exception as e:
+            print(f"[ERROR] The Sudo analysis task failed: {e}")
+            
+        try:
+            firewall_events = future_firewall.result()
+            print(f"[RESULT] Firewall analysis complete. Found {len(firewall_events)} events.")
+        except Exception as e:
+            print(f"[ERROR] The Firewall analysis task failed: {e}")
+            
+        try:
+            fim_events = future_fim.result()
+            print(f"[RESULT] FIM analysis complete. Found {len(fim_events)} events.")
+        except Exception as e:
+            print(f"[ERROR] The FIM analysis task failed: {e}")
+
+        try:
+            audit_events = future_audit.result()
+            print(f"[RESULT] Auditd analysis complete. Found {len(audit_events)} events.")
+        except Exception as e:
+            print(f"[ERROR] The Auditd analysis task failed: {e}")
+
+    print(f"\n[LOG] All analysis tasks finished.")
+    
+    if audit_events:
+        print(f"[DEBUG] {len(audit_events)} Audit Events were captured.")
+        for evt in audit_events:
+            print(f"   -> {evt['type']} | {evt['severity']} | {evt['msg']}")
+
+    events_for_risk_calc = audit_events + fim_events + ssh_events + sudo_events
+    
     risk_score, risk_engine_alerts = risk_engine.calculate_risk(
-        failed_logins, ports, cpu, ram, disk, 
-        audit_events + fim_events 
+        failed_logins, ports, cpu, ram, disk, events_for_risk_calc
     )
 
     print(f"\n[RESULT] Risk Score: {risk_score}/100")
@@ -764,33 +925,73 @@ def run():
             protocol = "UDP" if "PROTO=UDP" in log['msg'] else ("ICMP" if "PROTO=ICMP" in log['msg'] else "TCP")
             src = log['source']
             dst_port = 0
-            import re
-            port_match = re.search(r'DPT=(\d+)', log['msg'])
-            if port_match: dst_port = int(port_match.group(1))
+            try:
+                import re
+                port_match = re.search(r'DPT=(\d+)', log['msg'])
+                if port_match: dst_port = int(port_match.group(1))
+            except: pass
             db.insert_firewall_log(action, protocol, src, dst_port)
     
     detailed_sources = fim_events + ssh_events + sudo_events + audit_events
-    
+    print(f"[DEBUG] Alarm control is being performed. Total candidate events: {len(detailed_sources)}")
+
     for evt in detailed_sources:
-        if evt['severity'] in ['CRITICAL', 'HIGH']:
-            
+        if evt['severity'] in ['CRITICAL', 'HIGH', 'WARNING']:
             display_title = evt['msg']
             if len(display_title) > 60: display_title = display_title[:57] + "..."
             
             details_content = evt.get('details', 'No detailed breakdown available.')
 
+            event_score = risk_engine.RISK_SCORES.get(evt['type'], risk_engine.SEVERITY_SCORES.get(evt['severity'], 0))
+
             db.insert_alert(
                 level=evt['severity'],
                 title=display_title,
                 description=f"Detected by {evt['type']} module on {evt['source']}",
-                details=details_content 
+                details=details_content,
+                score=event_score
             )
-            print(f"   >>> ALARM SAVED: {display_title}")
+            print(f"   >>> [ALARM CREATED] {evt['type']}: {display_title}")
+
+            try:
+                import notifier 
+                notifier.send_discord_alert(
+                    title=display_title,
+                    description=f"Source: {evt['source']} | Type: {evt['type']}",
+                    level=evt['severity'],
+                    details=details_content
+                )
+            except ImportError:
+                pass
+            except Exception as e:
+                print(f"[WARNING] Notification could not be sent: {e}")
 
     for ra in risk_engine_alerts:
-        db.insert_alert(ra['level'].upper(), ra['title'], ra['msg'], ra.get('details'))
-        print(f"   !!! SYSTEM ALARM: {ra['title']}")
+        score_val = ra.get('score_impact')
 
+        db.insert_alert(
+            level=ra['level'].upper(),
+            title=ra['title'],
+            description=ra['msg'], 
+            details=ra.get('details'),
+            score=score_val  
+        )
+
+        print(f"   !!! [SYSTEM ALARM] {ra['title']} (Impact Score: {score_val})")
+        
+        if ra['level'].upper() in ['CRITICAL', 'HIGH']:
+            try:
+                import notifier
+                notifier.send_discord_alert(
+                    title=ra['title'],
+                    description=ra['msg'],
+                    level=ra['level'].upper(),
+                    details=ra.get('details', 'Risk threshold exceeded.')
+                )
+            except ImportError:
+                pass 
+            except Exception as e:
+                print(f"[WARNING] Notification error: {e}")
 
     db.maintenance(retention_days=7)
     utils.update_cursor()

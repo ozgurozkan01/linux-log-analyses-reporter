@@ -1,0 +1,95 @@
+# app.py 
+
+import sys
+import os
+import math
+import socket    
+import platform  
+from datetime import datetime 
+from typing import Final
+from flask import Flask, render_template, request, jsonify
+
+CURRENT_DIR    : Final = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT   : Final = os.path.dirname(CURRENT_DIR)
+sys.path.append(PROJECT_ROOT)
+
+from source import db
+from source import utils 
+
+app = Flask(__name__)
+
+@app.route('/api/live-stats')
+def live_stats():
+    return jsonify(utils.get_live_system_stats())
+
+@app.route('/logs')
+def logs_page():
+    params = {
+        'severity': request.args.get('severity'),
+        'keyword': request.args.get('keyword'),
+        'start_date': request.args.get('start_date'),
+        'end_date': request.args.get('end_date'),
+        'page': request.args.get('page', 1, type=int),
+        'per_page': 25
+    }
+    
+    events, total_count = db.advanced_filter_events(**params)
+    total_pages = math.ceil(total_count / params['per_page'])
+
+    dashboard_data, _ = utils.fetch_and_normalize_data()
+
+    return render_template('logs.html', 
+                           events=events, 
+                           current_page=params['page'], 
+                           total_pages=total_pages,
+                           total_count=total_count,
+                           data=dashboard_data)
+
+@app.route('/api/resolve_alert/<int:alert_id>', methods=['POST'])
+def resolve_alert(alert_id):
+    try:
+        data = request.get_json() or {}
+        note = data.get('note', 'Manuel olarak kapatıldı.')
+        
+        success = db.update_alert_status(alert_id, 'CLOSED', note)
+        
+        if success:
+            return jsonify({"success": True, "message": "Alert resolved"}), 200
+        else:
+            return jsonify({"success": False, "message": "Database error"}), 500
+            
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/resolution')
+def history_page():
+    alerts = db.get_resolved_alerts()
+    data, _ = utils.fetch_and_normalize_data()
+    
+    return render_template('resolution.html', alerts=alerts, data=data)
+
+@app.route('/')
+def index():
+    data, analytics = utils.fetch_and_normalize_data()
+    data['collector_status'] = utils.check_collector_status()
+    analytics['top_processes'] = utils.get_top_processes()
+    score = data['metrics']['risk_score']
+    
+    risk_class = "bg-success"
+    if   score >= 30: risk_class = "bg-warning"
+    elif score >= 60: risk_class = "bg-danger"
+
+    return render_template('dashboard.html', 
+                           data=data, 
+                           analytics=analytics,  
+                           risk_class=risk_class)
+
+if __name__ == '__main__':
+    try:
+        db.init_db()
+        print("[INFO] Database connection successfully.")
+    except Exception as e:
+        print(f"[ERROR] Database ERROR: {e}")
+
+    app.run(debug=True, port=5000)
