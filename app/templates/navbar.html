@@ -1,58 +1,112 @@
-    <nav class="navbar fixed-top navbar-expand-lg border-bottom py-2" style="background-color: var(--bs-body-bg);">
-        <div class="container-fluid px-4">
-            <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
-                <i class="fas fa-shield-halved text-primary"></i>
-                <span>CronWatch <span class="badge bg-primary rounded-pill ms-1"
-                        style="font-size: 0.6em; vertical-align: top;">Your Local SIEM</span></span>
+<style>
+    .nav-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 34px;
+        padding: 0 16px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        letter-spacing: 0.3px;
+    }
+
+    .btn-logs {
+        background-color: rgba(6, 182, 212, 0.08);
+        border-color: rgba(6, 182, 212, 0.2);
+        color: #22d3ee;
+    }
+
+    .btn-logs:hover {
+        background-color: rgba(6, 182, 212, 0.15);
+        border-color: #06b6d4;
+        color: #cffafe;
+        box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+        transform: translateY(-1px);
+    }
+
+    .btn-resolution {
+        background-color: rgba(16, 185, 129, 0.08);
+        border-color: rgba(16, 185, 129, 0.2);
+        color: #34d399;
+    }
+
+    .btn-resolution:hover {
+        background-color: rgba(16, 185, 129, 0.15);
+        border-color: #10b981;
+        color: #d1fae5;
+        box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+        transform: translateY(-1px);
+    }
+
+    .nav-action-btn i {
+        margin-right: 8px;
+        font-size: 0.9rem;
+    }
+</style>
+
+<nav class="navbar fixed-top navbar-expand-lg border-bottom py-2" style="background-color: var(--bs-body-bg);">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="/">
+            <i class="fas fa-shield-halved text-primary"></i>
+            <span>CronWatch <span class="badge bg-primary rounded-pill ms-1"
+                    style="font-size: 0.6em; vertical-align: top;">Your Local SIEM</span></span>
+        </a>
+
+        <div class="d-flex align-items-center ms-auto gap-3">
+
+            <div class="d-none d-lg-block text-end border-end pe-3 me-2">
+                <div class="fw-bold text-body small mb-1">
+                    Welcome, {{ data.sys_info.hostname }}
+                </div>
+
+                <div class="text-muted d-flex align-items-center justify-content-end gap-2" style="font-size: 0.7rem;">
+
+                    <span class="d-flex align-items-center" title="Operating System">
+                        <i class="fab fa-linux me-1"></i>
+                        <span class="text-truncate" style="max-width: 350px;">{{ data.sys_info.os }}</span>
+                    </span>
+                </div>
+            </div>
+            <div
+                class="d-none d-xl-inline-flex align-items-center small border px-3 py-1 rounded-pill bg-body-secondary text-body shadow-sm">
+                <div class="d-flex align-items-center me-2">
+                    {% if data.collector_status %}
+                    <span class="status-dot active"></span>
+                    <span class="fw-bold" style="font-size: 0.75rem; color: #28a745;">Collector Active</span>
+                    {% else %}
+                    <span class="status-dot inactive"></span>
+                    <span class="fw-bold" style="font-size: 0.75rem; color: #dc3545;">Collector Deactive</span>
+                    {% endif %}
+                </div>
+
+                <div class="d-flex align-items-center border-start ps-2 me-2 text-muted">
+                    <span class="d-flex align-items-center" title="Local IP">
+                        <i class="fas fa-ethernet me-1"></i>
+                        <span class="font-monospace">{{ data.sys_info.ip_address }}</span>
+                    </span>
+                </div>
+
+                <div class="d-flex align-items-center border-start ps-2 me-2 text-muted" title="System Uptime">
+                    <i class="fas fa-clock me-1"></i>
+                    <span id="live-uptime">{{ data.sys_info.uptime }}</span>
+                </div>
+
+                <div class="d-flex align-items-center border-start ps-2 text-muted" title="Last Audit Scan Time">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    <span> {{ data.last_scan }}</span>
+                </div>
+
+            </div>
+            <a href="/logs" class="nav-action-btn btn-logs">
+                <i class="fas fa-terminal"></i> Log Explorer
             </a>
 
-            <div class="d-flex align-items-center ms-auto gap-3">
-
-                <div class="d-none d-lg-block text-end border-end pe-3 me-2">
-                    <div class="fw-bold text-body small mb-1">
-                        Welcome, {{ data.sys_info.hostname }}
-                    </div>
-
-                    <div class="text-muted d-flex align-items-center justify-content-end gap-2"
-                        style="font-size: 0.7rem;">
-
-                        <span class="d-flex align-items-center" title="Operating System">
-                            <i class="fab fa-linux me-1"></i>
-                            <span class="text-truncate" style="max-width: 350px;">{{ data.sys_info.os }}</span>
-                        </span>
-                    </div>
-                </div>
-                <div
-                    class="d-none d-xl-inline-flex align-items-center small border px-3 py-1 rounded-pill bg-body-secondary text-body shadow-sm">
-                    <div class="d-flex align-items-center me-2">
-                        {% if data.collector_status %}
-                        <span class="status-dot active"></span>
-                        <span class="fw-bold" style="font-size: 0.75rem; color: #28a745;">Collector Active</span>
-                        {% else %}
-                        <span class="status-dot inactive"></span>
-                        <span class="fw-bold" style="font-size: 0.75rem; color: #dc3545;">Collector Deactive</span>
-                        {% endif %}
-                    </div>
-
-                    <div class="d-flex align-items-center border-start ps-2 me-2 text-muted">
-                        <span class="d-flex align-items-center" title="Local IP">
-                            <i class="fas fa-ethernet me-1"></i>
-                            <span class="font-monospace">{{ data.sys_info.ip_address }}</span>
-                        </span>
-                    </div>
-
-                    <div class="d-flex align-items-center border-start ps-2 me-2 text-muted" title="System Uptime">
-                        <i class="fas fa-clock me-1"></i>
-                        <span id="live-uptime">{{ data.sys_info.uptime }}</span>
-                    </div>
-
-                    <div class="d-flex align-items-center border-start ps-2 text-muted" title="Last Audit Scan Time">
-                        <i class="fas fa-sync-alt me-1"></i>
-                        <span> {{ data.last_scan }}</span>
-                    </div>
-
-                </div>
-                <a href="/logs" class="btn btn-sm btn-outline-primary" style="font-size: 0.75rem;">Log Explorer</a>
-            </div>
+            <a href="/resolution" class="nav-action-btn btn-resolution">
+                <i class="fas fa-check-double"></i> Resolution Log
+            </a>
         </div>
-    </nav>
+</nav>

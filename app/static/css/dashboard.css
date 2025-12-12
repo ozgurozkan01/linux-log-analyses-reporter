@@ -541,3 +541,24 @@
      color: #64748b !important;
      font-weight: 600;
  }
+
+ @keyframes medium-pulse {
+     0% {
+         box-shadow: 0 0 15px var(--glow-color) inset;
+         border-color: var(--border-color-low);
+     }
+
+     50% {
+         box-shadow: 0 0 25px var(--glow-color) inset, 0 0 50px var(--glow-color);
+         border-color: var(--border-color-high);
+     }
+
+     100% {
+         box-shadow: 0 0 15px var(--glow-color) inset;
+         border-color: var(--border-color-low);
+     }
+ }
+
+ .pulsing-card {
+     animation: medium-pulse 2s infinite ease-in-out;
+ }
