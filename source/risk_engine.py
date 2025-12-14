@@ -80,17 +80,6 @@ def calculate_risk(failed_logins, open_ports, cpu, ram, disk, security_events):
             "count": failed_logins,
             "score_impact": rule['score'] 
         })
-    elif failed_logins > 2:
-        rule = SYSTEM_ANOMALY_SCORES["AUTH_WARNING"]
-        score += rule['score']
-        anomalies.append({
-            "level": rule['level'].upper(),
-            "title": rule['title'],
-            "msg": f"{failed_logins} failed login attempts.",
-            "time": "System Metric",
-            "count": failed_logins,
-            "score_impact": rule['score']
-        })
 
     if cpu > 90:
         rule = SYSTEM_ANOMALY_SCORES["CPU_CRITICAL"]
