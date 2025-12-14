@@ -1,31 +1,10 @@
 # agent.py
 
-import sys
-import os
-import time
-import socket
-import platform
-import psutil       
-import subprocess   
-import re         
-import risk_engine   
-import json
-import shutil
-import binascii 
-import hashlib
-import difflib
 import utils
-import concurrent.futures
-import db
-from collections import defaultdict, deque
-from datetime import datetime, timedelta, timezone
-
-try:
-    from config import Config
-except ImportError:
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    from config import Config
-
+import risk_engine
+import db 
+from common_libs import *
+from config import Config
 
 def analyze_ssh_logs():
     failed_count = 0
@@ -36,24 +15,20 @@ def analyze_ssh_logs():
     BRUTE_FORCE_THRESHOLD = Config.SSH_BRUTE_FORCE_THRESHOLD
 
     since_time = utils.get_since_timestamp()
-
-    cmd = [
-        "journalctl",
-        "-u", "ssh", 
-        "-u", "sshd", 
-        "--since", since_time,
-        "--no-pager",
-        "--output=short-iso"
-    ]
     
-    print(f"[LOG] Analyzing SSH logs since: {since_time}")
+    cmd = Config.CMD_SSH_BASE + ["--since", since_time]
+    
     print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START --- analyze_ssh_logs ---\n")
 
     fail_tracker = defaultdict(deque)
+    alerted_sessions = set() 
 
+    rgx_ts = re.compile(r'^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[^ ]*)')
     rgx_ip = re.compile(r'from\s+([0-9a-fA-F:\.]+(?:%[a-zA-Z0-9]+)?)')
-    rgx_user_fail = re.compile(r'for\s+(?:invalid user\s+)?([\w\.-]+)')
+    rgx_user_fail = re.compile(r'for\s+(?:invalid user\s+)?([\w\.-]+)\s+from')
     rgx_user_succ = re.compile(r'for\s+([\w\.-]+)\s+from')
+    
+    current_host = socket.gethostname()
 
     try:
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1) as proc:
@@ -68,33 +43,53 @@ def analyze_ssh_logs():
                 line = line.strip()
                 if not line: continue
 
-                try:
-                    ts_str = line.split()[0] 
-                    current_ts = datetime.fromisoformat(ts_str)
-                except:
-                    current_ts = datetime.now()
+                ts_match = rgx_ts.match(line)
+                if ts_match:
+                    try:
+                        current_ts = datetime.fromisoformat(ts_match.group(1))
+                    except ValueError:
+                        continue
+                else:
+                    continue 
+
+                ip_match = rgx_ip.search(line)
+                src_ip = ip_match.group(1) if ip_match else "Unknown"
+
+                if src_ip in ["::1", "127.0.0.1", "localhost"]:
+                    src_ip = "LOCALHOST"
 
                 if "Failed password" in line:
-                    ip_match = rgx_ip.search(line)
                     user_match = rgx_user_fail.search(line)
-
-                    src_ip = ip_match.group(1) if ip_match else "Unknown"
                     username = user_match.group(1) if user_match else "Unknown"
 
-                    fail_tracker[src_ip].append(current_ts)
+                    session_key = (src_ip, username)
+                    
+                    fail_tracker[session_key].append(current_ts)
 
-                    while fail_tracker[src_ip]:
-                        if (current_ts - fail_tracker[src_ip][0]).total_seconds() > BRUTE_FORCE_WINDOW:
-                            fail_tracker[src_ip].popleft()
+                    while fail_tracker[session_key]:
+                        if (current_ts - fail_tracker[session_key][0]).total_seconds() > BRUTE_FORCE_WINDOW:
+                            fail_tracker[session_key].popleft()
                         else:
                             break
+                    
+                    if not fail_tracker[session_key]:
+                        del fail_tracker[session_key]
+                        if session_key in alerted_sessions:
+                            alerted_sessions.discard(session_key)
+                        continue
 
-                    recent_fails = len(fail_tracker[src_ip])
+                    recent_fails = len(fail_tracker[session_key])
 
                     if recent_fails >= BRUTE_FORCE_THRESHOLD:
-                        severity = "CRITICAL"
-                        msg = f"Brute Force Detected ({recent_fails} attempts)"
-                        event_type = "SSH_BRUTE_FORCE"
+                        if session_key not in alerted_sessions:
+                            severity = "CRITICAL"
+                            msg = f"Brute Force Detected ({recent_fails} attempts)"
+                            event_type = "SSH_BRUTE_FORCE"
+                            alerted_sessions.add(session_key)
+                        else:
+                            severity = "HIGH" 
+                            msg = f"Brute Force Continuing ({recent_fails} attempts)"
+                            event_type = "SSH_BRUTE_FORCE_ONGOING"
                     else:
                         severity = "HIGH"
                         msg = "Invalid SSH attempt"
@@ -104,9 +99,8 @@ def analyze_ssh_logs():
                         f"Event Type: {event_type}\n"
                         f"User: {username}\n"
                         f"Source IP: {src_ip}\n"
-                        f"Protocol: SSH (Port 22)\n"
                         f"Attempt Count: {recent_fails}\n"
-                        f"Analysis: {msg}\n"
+                        f"Window: {BRUTE_FORCE_WINDOW}s\n"
                     )
 
                     events.append({
@@ -114,33 +108,37 @@ def analyze_ssh_logs():
                         "source": src_ip,
                         "user": username,
                         "severity": severity,
-                        "msg": f"{msg} from {src_ip}",
-                        "details": details_str
+                        "msg": f"{msg} user={username} src={src_ip}",
+                        "details": details_str,
+                        "timestamp": current_ts.isoformat(),
+                        "host": current_host,
+                        "raw_log": line
                     })
 
                 elif "Accepted password" in line or "Accepted publickey" in line:
-                    ip_match = rgx_ip.search(line)
                     user_match = rgx_user_succ.search(line)
-
-                    src_ip = ip_match.group(1) if ip_match else "Local"
                     username = user_match.group(1) if user_match else "Unknown"
+                    
+                    session_key = (src_ip, username)
 
                     severity = "INFO"
                     msg = "Valid SSH login"
                     event_type = "SSH_AUTH_SUCCESS"
-
-                    recent_fails = len(fail_tracker.get(src_ip, []))
-                    if recent_fails >= BRUTE_FORCE_THRESHOLD:
+                    
+                    if session_key in fail_tracker and len(fail_tracker[session_key]) >= BRUTE_FORCE_THRESHOLD:
                         severity = "CRITICAL"
                         msg = "SUCCESSFUL LOGIN AFTER BRUTE FORCE ATTACK!"
                         event_type = "SSH_COMPROMISE"
-                        fail_tracker[src_ip].clear()
+                        
+                        fail_tracker[session_key].clear()
+                        del fail_tracker[session_key]
+                        if session_key in alerted_sessions:
+                            alerted_sessions.discard(session_key)
 
                     details_str = (
                         f"Event Type: {event_type}\n"
                         f"User: {username}\n"
                         f"Source IP: {src_ip}\n"
-                        f"Protocol: SSH\n"
                         f"Analysis: Access granted.\n"
                     )
 
@@ -150,7 +148,10 @@ def analyze_ssh_logs():
                         "user": username,
                         "severity": severity,
                         "msg": f"{msg} for {username}",
-                        "details": details_str
+                        "details": details_str,
+                        "timestamp": current_ts.isoformat(),
+                        "host": current_host,
+                        "raw_log": line
                     })
 
     except Exception as e:
@@ -168,23 +169,23 @@ def analyze_sudo_logs():
     SENSITIVE_FILES = Config.SUDO_SENSITIVE_FILES
     NORMAL_COOLDOWN = Config.SUDO_NORMAL_COOLDOWN
     CRITICAL_COOLDOWN = Config.SUDO_CRITICAL_COOLDOWN
+
+    gtfobins_risky = Config.SUDO_GTFOBINS_RISKY
+    priv_escalation_bins = Config.SUDO_PRIV_ESCALATION
+    shell_bins = Config.SUDO_SHELL_BINS
+    net_bins = Config.SUDO_NET_BINS
+    read_bins = Config.SUDO_READ_BINS
+    
     since_time = utils.get_since_timestamp()
     
-    cmd = ["journalctl", "-t", "sudo", "--since", since_time, "--no-pager", "--output=short-iso"]
+    cmd = Config.CMD_SUDO_BASE + ["--since", since_time]
     
-    print(f"[LOG] Analyzing SUDO commands (High Performance Mode) since: {since_time}")
     print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START --- analyze_sudo_logs ---")
 
     last_sudo_map = defaultdict(lambda: datetime.min)
 
     rgx_meta = re.compile(r'sudo\[(\d+)\]:\s+(\S+)\s+:')
     
-    gtfobins_risky = {'find', 'awk', 'nmap', 'man', 'less', 'more', 'vi', 'vim', 'gdb', 'tar', 'zip'}
-    priv_escalation_bins = {'chmod', 'chown', 'chgrp', 'passwd', 'useradd', 'usermod'}
-    shell_bins = {'bash', 'sh', 'zsh', 'su'}
-    net_bins = {'wget', 'curl', 'nc', 'netcat', 'socat'}
-    read_bins = {'cat', 'head', 'tail', 'grep', 'more', 'less'}
-
     try:
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, bufsize=1) as proc:
             
@@ -303,9 +304,8 @@ def analyze_audit_logs():
         print("[ERROR] 'ausearch' komutu bulunamadı. Auditd yüklü mü?")
         return events
 
-    cmd = ["ausearch", "-k", "process_monitor", "-i", "-ts", "recent"]
+    cmd = Config.CMD_AUDIT_FULL
 
-    print(f"[LOG] Auditd logları analiz ediliyor (Process Monitor)...")
     print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START --- analyze_audit_logs ---\n") # <-- ADD THIS LINE
 
     rgx_exe = re.compile(r'exe="([^"]+)"')
@@ -314,23 +314,11 @@ def analyze_audit_logs():
     rgx_uid = re.compile(r'uid=(\S+)')
     rgx_path = re.compile(r'name="([^"]+)"')
 
-    suspicious_bins_regex = re.compile(r'\b(nc|ncat|netcat|nmap|tcpdump|wireshark|gdb|strace|ftpd|socat)\b')
-    
-    webshell_regex = re.compile(r'(?x)' 
-        r'\b('
-        r'(?:python[23]?|perl|ruby|lua|php[578]?)\s+-[cer]|'  
-        r'(?:bash|sh|zsh|dash|ksh)\s+-[ic]|'                   
-        r'/dev/(?:tcp|udp)/\d{1,3}\.\d{1,3}|'                  
-        r'base64\s+-(?:d|D|decode)|'                           
-        r'(?:wget|curl|fetch)\s+http'                          
-        r')'
-    )
-    
-    recon_regex = re.compile(r'\b(whoami|id|uname -a|cat /etc/issue)\b')
-    
-    perm_mod_regex = re.compile(r'\b(chmod|chown|chgrp)\b')
-    
-    critical_files = {'/etc/shadow', '/etc/passwd', '/etc/sudoers', '/var/log/auth.log'}
+    suspicious_bins_regex = re.compile(r'\b(' + '|'.join(Config.AUDIT_SUSPICIOUS_BINS) + r')\b')
+    webshell_regex = re.compile(Config.AUDIT_WEBSHELL_PATTERN)
+    recon_regex = re.compile(r'\b(' + '|'.join(map(re.escape, Config.AUDIT_RECON_COMMANDS)) + r')\b')
+    perm_mod_regex = re.compile(r'\b(' + '|'.join(Config.AUDIT_PERM_MOD_CMDS) + r')\b')
+    critical_files = Config.AUDIT_CRITICAL_FILES
 
     try:
         raw_output = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode('utf-8', errors='ignore')
@@ -457,7 +445,6 @@ def analyze_file_integrity():
     SAFE_CHANGES = Config.FIM_SAFE_CHANGES
     MAX_FILE_SIZE = Config.FIM_MAX_FILE_SIZE
 
-    print("[LOG] FIM (File Integrity Monitoring) scanning...")
     print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START --- analyze_fim_logs ---\n")
 
     start_time = time.time()
@@ -558,7 +545,6 @@ def analyze_file_integrity():
             stored_data = db.get_file_baseline(filepath)
 
             if  stored_data and stored_data['inode'] == current_inode and stored_data.get('mtime') == current_mtime and stored_data.get('perms') == current_perms and stored_data.get('uid') == current_uid and stored_data.get('gid') == current_gid:        
-
                 print(f"   [FAST SKIP] {filepath} (No changes)") 
                 continue
 
@@ -680,7 +666,7 @@ def analyze_firewall_logs():
     events = []
     since_time = utils.get_since_timestamp()
     
-    cmd = f"journalctl -k --since '{since_time}' --no-pager --output=short-iso"
+    cmd = Config.CMD_FIREWALL_TEMPLATE.format(since_time)
     
     critical_ports = Config.FW_CRITICAL_PORTS
     TIME_WINDOW = Config.FW_TIME_WINDOW
@@ -858,7 +844,7 @@ def run():
     fim_events = []
     audit_events = []
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=Config.AGENT_MAX_WORKERS) as executor:
         print("[LOG] Starting parallel log analysis...")
         
         future_ssh = executor.submit(analyze_ssh_logs)
