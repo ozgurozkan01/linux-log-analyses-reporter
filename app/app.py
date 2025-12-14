@@ -2,19 +2,16 @@
 
 import sys
 import os
-import math
-import socket    
-import platform  
-from datetime import datetime 
 from typing import Final
-from flask import Flask, render_template, request, jsonify
 
-CURRENT_DIR    : Final = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT   : Final = os.path.dirname(CURRENT_DIR)
+CURRENT_DIR  : Final = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT : Final = os.path.dirname(CURRENT_DIR)
 sys.path.append(PROJECT_ROOT)
 
+from source.common_libs import *
 from source import db
 from source import utils 
+
 
 app = Flask(__name__)
 

@@ -3,10 +3,12 @@
 import os
 
 class Config:
+    
     SOURCE_DIR = os.path.dirname(os.path.abspath(__file__))
     
     ROOT_DIR = os.path.dirname(SOURCE_DIR)
-    
+
+    COLLECTOR_PATH = os.path.join(SOURCE_DIR, "agent.py")
     DATA_DIR = os.path.join(ROOT_DIR, "data")
 
     if not os.path.exists(DATA_DIR):
@@ -22,17 +24,24 @@ class Config:
     DB_NAME = os.path.join(DATA_DIR, "siem.db")
     CURSOR_FILE = os.path.join(DATA_DIR, "last_scan_cursor.txt")
 
+    AGENT_MAX_WORKERS = 5
     RETENTION_DAYS = 7        
     LOOKBACK_MINUTES = 30     
 
+    CMD_SSH_BASE = [ "journalctl", "-u", "ssh", "-u", "sshd", "--no-pager", "--output=short-iso" ]
+    CMD_SUDO_BASE = ["journalctl", "-t", "sudo", "--no-pager", "--output=short-iso"]
+    CMD_AUDIT_FULL = ["ausearch", "-k", "process_monitor", "-i", "-ts", "recent"]
+    CMD_FIREWALL_TEMPLATE = "journalctl -k --since '{}' --no-pager --output=short-iso"
+
+    # SSH
     SSH_MAX_EVENTS = 2000
     SSH_BRUTE_FORCE_WINDOW = 300  
     SSH_BRUTE_FORCE_THRESHOLD = 3 
-
+    
+    # SUDO
     SUDO_MAX_EVENTS = 1000
     SUDO_NORMAL_COOLDOWN = 10     
     SUDO_CRITICAL_COOLDOWN = 2    
-    
     SUDO_SENSITIVE_FILES = [
         '/etc/shadow', 
         '/etc/passwd', 
@@ -41,7 +50,30 @@ class Config:
         '.bash_history', 
         '/root/'
     ]
+    SUDO_GTFOBINS_RISKY = {'find', 'awk', 'nmap', 'man', 'less', 'more', 'vi', 'vim', 'gdb', 'tar', 'zip'}
+    SUDO_PRIV_ESCALATION = {'chmod', 'chown', 'chgrp', 'passwd', 'useradd', 'usermod'}
+    SUDO_SHELL_BINS = {'bash', 'sh', 'zsh', 'su'}
+    SUDO_NET_BINS = {'wget', 'curl', 'nc', 'netcat', 'socat'}
+    SUDO_READ_BINS = {'cat', 'head', 'tail', 'grep', 'more', 'less'}
+    
+    # AUDIT
+    AUDIT_CRITICAL_FILES = {'/etc/shadow', '/etc/passwd', '/etc/sudoers', '/var/log/auth.log'}
+    AUDIT_SUSPICIOUS_BINS = [
+        'nc', 'ncat', 'netcat', 'nmap', 'tcpdump', 'wireshark', 
+        'gdb', 'strace', 'ftpd', 'socat'
+    ]
+    AUDIT_RECON_COMMANDS = [ 'whoami', 'id', 'uname -a', 'cat /etc/issue' ]
+    AUDIT_PERM_MOD_CMDS = [ 'chmod', 'chown', 'chgrp' ]
+    AUDIT_WEBSHELL_PATTERN = r'''(?x)
+        \b(
+        (?:python[23]?|perl|ruby|lua|php[578]?)\s+-[cer]|
+        (?:bash|sh|zsh|dash|ksh)\s+-[ic]|
+        /dev/(?:tcp|udp)/\d{1,3}\.\d{1,3}|
+        base64\s+-(?:d|D|decode)|
+        (?:wget|curl|fetch)\s+http
+        )'''
 
+    # FIM
     FIM_MAX_FILE_SIZE = 5 * 1024 * 1024 
     
     FIM_TARGETS = [
@@ -57,7 +89,8 @@ class Config:
     ]
     
     FIM_SAFE_CHANGES = ["/etc/hosts", "/etc/resolv.conf"]
-
+    
+    # FIREWALL
     FW_TIME_WINDOW = 30           
     FW_HIT_THRESHOLD = 20         
     FW_UNIQUE_PORT_THRESHOLD = 5  

@@ -1,31 +1,12 @@
 # utils.py
 
-import os
-import psutil
-import subprocess
-import json 
-import sys
-import socket
-import platform
-from pathlib import Path
-from typing import Final
-from datetime import datetime
-
-try:
-    from config import Config
-except ImportError:
-    import sys
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    from config import Config
-
-try:
-    import db
-except ImportError:
-    from source import db
+from common_libs import *
+from config import Config
+import db
 
 CURRENT_DIR    : Final = Config.SOURCE_DIR
 PROJECT_ROOT   : Final = Config.ROOT_DIR
-COLLECTOR_PATH : Final = os.path.join(Config.SOURCE_DIR, "agent.py")
+COLLECTOR_PATH : Final = Config.COLLECTOR_PATH
 
 CURSOR_FILE    : Final = Config.CURSOR_FILE
 LOOKBACK_MINUTES = Config.LOOKBACK_MINUTES
