@@ -30,7 +30,10 @@ def logs_page():
         'per_page': 25
     }
     
-    events, total_count = db.advanced_filter_events(**params)
+    firewall_event_types = ['NETFILTER', 'PORT_SCAN', 'CRITICAL_PORT', 'FLOOD_DETECTED']
+    
+    events, total_count = db.advanced_filter_events(event_types_exclude=firewall_event_types, **params)
+    
     total_pages = math.ceil(total_count / params['per_page'])
 
     dashboard_data, _ = utils.fetch_and_normalize_data()
@@ -58,7 +61,6 @@ def resolve_alert(alert_id):
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 @app.route('/resolution')
 def history_page():
     alerts = db.get_resolved_alerts()
@@ -66,15 +68,37 @@ def history_page():
     
     return render_template('resolution.html', alerts=alerts, data=data)
 
+@app.route('/api/firewall_stats')
+def api_firewall_stats():
+    try:
+        stats = db.get_firewall_stats() 
+        return jsonify(stats)
+    except Exception as e:
+        print(f"[API ERROR] Firewall stats hatası: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/fwstream')
+def firewall_stream_page():
+    firewall_stats = db.get_firewall_stats() 
+    live_events = db.get_latest_firewall_logs(limit=50) 
+    dashboard_data, _ = utils.fetch_and_normalize_data()
+
+    return render_template('firewall_stream.html', 
+                           events=live_events, 
+                           stats=firewall_stats, 
+                           data=dashboard_data)
+
 @app.route('/')
 def index():
     data, analytics = utils.fetch_and_normalize_data()
     data['collector_status'] = utils.check_collector_status()
     analytics['top_processes'] = utils.get_top_processes()
-    score = data['metrics']['risk_score']
     
+    analytics['firewall_stats'] = db.get_firewall_stats() 
+    
+    score = data['metrics']['risk_score']
     risk_class = "bg-success"
-    if   score >= 30: risk_class = "bg-warning"
+    if score >= 30: risk_class = "bg-warning"
     elif score >= 60: risk_class = "bg-danger"
 
     return render_template('dashboard.html', 
