@@ -178,15 +178,144 @@ def get_resolved_alerts(limit=100):
     return db.query_all("SELECT * FROM alerts WHERE status = 'CLOSED' ORDER BY timestamp DESC LIMIT ?", (limit,))
 
 def get_firewall_stats():
-    rows = db.query_all("SELECT action, COUNT(*) as count FROM firewall_logs WHERE timestamp >= datetime('now', '-24 hours') GROUP BY action")
-    stats = {'allow': 0, 'deny': 0}
-    for row in rows:
-        act = row['action'].upper()
-        if any(x in act for x in ['BLOCK', 'DENY', 'DROP', 'REJECT']):
-            stats['deny'] += row['count']
+    """
+    Firewall loglarını analiz ederek Dashboard ve FW Stream için
+    gerekli tüm istatistikleri üretir.
+    (GÜNCELLENMİŞ VERSİYON: Tarih formatı hatalarını tolere eder)
+    """
+    stats = {
+        'traffic_labels': [],
+        'traffic_values': [],
+        'traffic_baseline': [],
+        'network_analysis': {
+            'internal': {'total': 0, 'allow': 0, 'block': 0, 'drop': 0},
+            'external': {'total': 0, 'allow': 0, 'block': 0, 'drop': 0}
+        },
+        'actions': {'ALLOW': 0, 'BLOCK': 0},
+        'scan_types': {},       
+        'top_ports': [],
+        'repeated_offenders': [],
+        'geo_stats': {'Internal': 0, 'External': 0}
+    }
+
+    try:
+        logs = db.query_all("SELECT * FROM firewall_logs ORDER BY timestamp ASC")
+
+        hourly_traffic = {}
+        now = datetime.now()
+        
+        for log in logs:
+            ts_str = log['timestamp']
+            dt = None
+            
+            formats = [
+                '%Y-%m-%d %H:%M:%S.%f', # Mikro saniyeli
+                '%Y-%m-%d %H:%M:%S',    # Standart
+                '%Y-%m-%dT%H:%M:%S'     # ISO formatı
+            ]
+            
+            for fmt in formats:
+                try:
+                    dt = datetime.strptime(ts_str, fmt)
+                    break
+                except ValueError:
+                    continue
+            
+            if not dt:
+                continue
+
+            if dt < now - timedelta(hours=24):
+                continue
+
+            if dt > now - timedelta(hours=12):
+                hour_key = dt.strftime('%H:00')
+                hourly_traffic[hour_key] = hourly_traffic.get(hour_key, 0) + 1
+
+            ip = log['src_ip']
+            action = log['action'].upper()
+            if action in ['DENY', 'REJECT']: action = 'BLOCK'
+            
+            if action in ['ALLOW', 'BLOCK']:
+                stats['actions'][action] = stats['actions'].get(action, 0) + 1
+
+            is_internal = False
+            try:
+                if ip and ip != '0.0.0.0':
+                    if ipaddress.ip_address(ip).is_private: is_internal = True
+            except: pass 
+
+            target_group = 'internal' if is_internal else 'external'
+            stats['network_analysis'][target_group]['total'] += 1
+            
+            if action == 'ALLOW': stats['network_analysis'][target_group]['allow'] += 1
+            elif action == 'BLOCK': stats['network_analysis'][target_group]['block'] += 1
+            elif action == 'DROP': stats['network_analysis'][target_group]['drop'] += 1
+            else: stats['network_analysis'][target_group]['block'] += 1
+
+        if hourly_traffic:
+            sorted_hours = sorted(hourly_traffic.keys())
+            stats['traffic_labels'] = sorted_hours
+            stats['traffic_values'] = [hourly_traffic[h] for h in sorted_hours]
+            stats['traffic_baseline'] = [int(v * 0.8) for v in stats['traffic_values']]
         else:
-            stats['allow'] += row['count']
+            stats['traffic_labels'] = ["No Data"]
+            stats['traffic_values'] = [0]
+
+        stats['geo_stats']['Internal'] = stats['network_analysis']['internal']['total']
+        stats['geo_stats']['External'] = stats['network_analysis']['external']['total']
+
+        cutoff = (now - timedelta(hours=24)).strftime('%Y-%m-%d %H:%M:%S')
+        
+        port_rows = db.query_all(f"SELECT dst_port, count(*) as count FROM firewall_logs WHERE action IN ('BLOCK', 'DROP', 'DENY') AND timestamp > '{cutoff}' GROUP BY dst_port ORDER BY count DESC LIMIT 5")
+        stats['top_ports'] = [dict(row) for row in port_rows]
+
+        offender_rows = db.query_all(f"SELECT src_ip, count(*) as count, max(timestamp) as last_seen FROM firewall_logs WHERE action IN ('BLOCK', 'DROP', 'DENY') AND timestamp > '{cutoff}' GROUP BY src_ip ORDER BY count DESC LIMIT 10")
+        
+        for row in offender_rows:
+            itype = 'External'
+            try:
+                if ipaddress.ip_address(row['src_ip']).is_private: itype = 'Internal'
+            except: pass
+            
+            lseen = str(row['last_seen']).split('.')[0]
+            stats['repeated_offenders'].append({'ip': row['src_ip'], 'count': row['count'], 'type': itype, 'last_seen': lseen})
+
+    except Exception as e:
+        print(f"[ERROR] get_firewall_stats failed: {e}")
+        import traceback
+        traceback.print_exc() # Detaylı hatayı konsola bas
+    
     return stats
+
+def get_latest_firewall_logs(limit=50):
+    return db.query_all(
+        "SELECT * FROM firewall_logs ORDER BY id DESC LIMIT ?", 
+        (limit,)
+    )
+
+def get_recent_firewall_logs(hours=24):
+    return db.query_all("""
+        SELECT * FROM firewall_logs 
+        WHERE timestamp > datetime('now', ?) 
+        ORDER BY timestamp ASC
+    """, (f'-{hours} hours',))
+
+def get_events_by_type(event_types, limit=50):
+
+    if not event_types or not isinstance(event_types, list):
+        return []
+
+    try:
+        placeholders = ', '.join(['?'] * len(event_types))
+        query = f"SELECT * FROM events WHERE event_type IN ({placeholders}) ORDER BY id DESC LIMIT ?"
+        params = tuple(event_types + [limit])
+        
+        rows = db.query_all(query, params)
+        return rows
+        
+    except Exception as e:
+        print(f"[ERROR] get_events_by_type error: {e}")
+        return []
 
 def get_heatmap_data():
     rows = db.query_all("""
@@ -207,9 +336,19 @@ def get_log_volume_stats():
         volume_data.append(row['c'] if row else 0)
     return volume_data
 
-def advanced_filter_events(start_date=None, end_date=None, ip=None, username=None, severity=None, keyword=None, page=1, per_page=25):
+def advanced_filter_events(start_date=None, end_date=None, ip=None, username=None, 
+                           severity=None, keyword=None, page=1, per_page=25, 
+                           event_types_exclude=None): # <<< 1. PARAMETRE ADI DEĞİŞTİ (ÇOĞUL OLDU)
+    
     base_query = "FROM events WHERE 1=1"
     params = []
+
+    if event_types_exclude and isinstance(event_types_exclude, list):
+        placeholders = ', '.join(['?'] * len(event_types_exclude))
+        
+        base_query += f" AND event_type NOT IN ({placeholders})"
+        
+        params.extend(event_types_exclude)
 
     if start_date:
         base_query += " AND timestamp >= ?"
