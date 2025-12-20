@@ -3,13 +3,14 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Audit Log | CronWatch</title>
+    <title>Audit Log</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
     <link
         href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap"
         rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favd.png') }}">
 
     <style>
         :root {
@@ -29,7 +30,6 @@
             min-height: 100vh;
         }
 
-        /* Stats Header Cards */
         .stat-card {
             background: linear-gradient(145deg, rgba(30, 41, 59, 0.7), rgba(15, 23, 42, 0.7));
             border: 1px solid rgba(255, 255, 255, 0.05);
@@ -49,7 +49,6 @@
             background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
         }
 
-        /* Timeline Styles */
         .timeline-container {
             position: relative;
             padding-left: 2rem;
@@ -84,7 +83,6 @@
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
         }
 
-        /* Timeline Dot */
         .log-card::before {
             content: '';
             position: absolute;
@@ -99,7 +97,6 @@
             z-index: 2;
         }
 
-        /* Level Indicators */
         .level-bar {
             position: absolute;
             left: 0;
@@ -123,7 +120,6 @@
             background: #eab308;
         }
 
-        /* Resolution Box */
         .resolution-note {
             background: rgba(16, 185, 129, 0.05);
             border: 1px dashed rgba(16, 185, 129, 0.3);
@@ -161,7 +157,6 @@
 
     <div class="container py-5">
 
-        <!-- Header & Stats (DÜZELTİLMİŞ HESAPLAMA) -->
         {% set total_resolved = alerts|length %}
 
         {% set ns = namespace(total_score=0) %}
@@ -223,7 +218,6 @@
                     {% endif %}
 
                     <div class="log-card">
-                        <!-- Sol Renk Çubuğu -->
                         <div class="level-bar {{ lvl_class }}"></div>
 
                         <div class="d-flex justify-content-between align-items-start mb-2 ps-2">
@@ -272,7 +266,6 @@
                     {% endfor %}
 
                     {% else %}
-                    <!-- Boş Durum -->
                     <div class="text-center py-5">
                         <div class="mb-3">
                             <i class="fas fa-clipboard-check fa-4x text-secondary opacity-25"></i>

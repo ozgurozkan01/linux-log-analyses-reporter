@@ -4,439 +4,912 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CronWatch SIEM | Dashboard</title>
+    <title>Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favd.png') }}">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
     {% include 'navbar.html' %}
-    <div class="container-fluid px-4 py-4"></div>
+    <div class="container-fluid px-3 py-3"></div>
+    <div class="container-fluid px-3 py-3"></div>
     <div class="container-fluid px-4 py-4">
-        <div class="row g-3 mb-4">
-            <div class="col-lg-3 col-md-6" style="height: 290px; flex:1.4;">
+        <div class="d-flex gap-3 flex-wrap flex-xl-nowrap align-items-stretch">
+            <div class="flex-grow-1 d-flex flex-column gap-3" style="min-width: 0;">
+                <div class="row g-3">
+                    <div class="col-xl-4 col-lg-5 col-md-12" style="height: 320px;">
+                        {% set ns = namespace(c_count=0, c_score=0, h_count=0, h_score=0, w_count=0, w_score=0) %}
 
-                {% set ns = namespace(c_count=0, c_score=0, h_count=0, h_score=0, w_count=0, w_score=0) %}
+                        {% if data.alerts %}
+                        {% for alert in data.alerts %}
+                        {% set current_score = alert.score|default(0)|int %}
 
-                {% if data.alerts %}
-                {% for alert in data.alerts %}
-                {% set current_score = alert.score|default(0)|int %}
+                        {% if alert.level|lower == 'critical' %}
+                        {% set ns.c_count = ns.c_count + 1 %}
+                        {% set ns.c_score = ns.c_score + current_score %}
 
-                {% if alert.level|lower == 'critical' %}
-                {% set ns.c_count = ns.c_count + 1 %}
-                {% set ns.c_score = ns.c_score + current_score %}
+                        {% elif alert.level|lower == 'high' %}
+                        {% set ns.h_count = ns.h_count + 1 %}
+                        {% set ns.h_score = ns.h_score + current_score %}
 
-                {% elif alert.level|lower == 'high' %}
-                {% set ns.h_count = ns.h_count + 1 %}
-                {% set ns.h_score = ns.h_score + current_score %}
-
-                {% elif alert.level|lower == 'warning' %}
-                {% set ns.w_count = ns.w_count + 1 %}
-                {% set ns.w_score = ns.w_score + current_score %}
-                {% endif %}
-                {% endfor %}
-                {% endif %}
-
-                {% set calculated_total = ns.c_score + ns.h_score + ns.w_score %}
-
-                {% if calculated_total > 100 %}
-                {% set score = 100 %}
-                {% else %}
-                {% set score = calculated_total %}
-                {% endif %}
-
-                {# --- 3. RENK VE İKON AYARLARI --- #}
-                {% set icon = 'fa-shield-virus' %}
-
-                {% if score == 0 %}
-                {% set text_color = '#00ff88' %}
-                {% set status_text = 'SYSTEM SECURE' %}
-                {% set status_msg = 'All systems normal.' %}
-                {% set icon = 'fa-shield-alt' %}
-
-                {% elif score < 10 %} {% set text_color='#ccff00' %} {% set status_text='MINIMAL RISK' %} {% set
-                    status_msg='Negligible activity.' %} {% set icon='fa-eye' %} {% elif score < 20 %} {% set
-                    text_color='#eaff00' %} {% set status_text='LOW RISK' %} {% set status_msg='Minor anomalies.' %} {%
-                    set icon='fa-eye' %} {% elif score < 30 %} {% set text_color='#ffcc00' %} {% set
-                    status_text='ATTENTION' %} {% set status_msg='Suspicious patterns.' %} {% set icon='fa-exclamation'
-                    %} {% elif score < 40 %} {% set text_color='#ffaa00' %} {% set status_text='ELEVATED' %} {% set
-                    status_msg='Multiple warnings.' %} {% set icon='fa-exclamation-circle' %} {% elif score < 50 %} {%
-                    set text_color='#ff7b00' %} {% set status_text='THREAT DETECTED' %} {% set
-                    status_msg='Potential intrusion.' %} {% set icon='fa-fire' %} {% elif score < 60 %} {% set
-                    text_color='#ff4000' %} {% set status_text='HIGH RISK' %} {% set status_msg='Protocol breach.' %} {%
-                    set icon='fa-virus' %} {% elif score < 70 %} {% set text_color='#ff0000' %} {% set
-                    status_text='DANGER' %} {% set status_msg='Active attack.' %} {% set icon='fa-radiation' %} {% elif
-                    score < 80 %} {% set text_color='#d60000' %} {% set status_text='CRITICAL FAILURE' %} {% set
-                    status_msg='Integrity compromised.' %} {% set icon='fa-radiation-alt' %} {% elif score < 90 %} {%
-                    set text_color='#900020' %} {% set status_text='SYSTEM BREACH' %} {% set
-                    status_msg='Data exfiltration risk.' %} {% set icon='fa-biohazard' %} {% else %} {% set
-                    text_color='#ff0055' %} {% set status_text='TOTAL COMPROMISE' %} {% set
-                    status_msg='IMMEDIATE ACTION.' %} {% set icon='fa-skull' %} {% endif %} <div
-                    class="card h-100 pulsing-card" style="--glow-color: {{ text_color }}30;
-            --border-color-low: {{ text_color }}40;
-            --border-color-high: {{ text_color }}80;
-            background: radial-gradient(circle at 50% 20%, {{ text_color }}50 0%, #1b213b 90%);
-            border: 1px solid {{ text_color }}40;
-            transition: all 0.5s ease;">
-
-                    <div class="card-body p-3 d-flex flex-column">
-
-                        {# ÜST: SKOR VE İKON #}
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div>
-                                <h6 class="text-uppercase small fw-bold mb-0"
-                                    style="color: rgba(255,255,255,0.7); letter-spacing: 1px;">
-                                    Threat Percent
-                                </h6>
-                                <h2 class="display-4 fw-bold mb-0"
-                                    style="text-shadow: 0 0 25px {{ text_color }}; color: {{ text_color }}; font-family: 'Inter', sans-serif;">
-                                    %{{ score }}
-                                </h2>
-                            </div>
-                            <div
-                                style="background: rgba(0,0,0,0.3); border-radius: 50%; padding: 10px; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px {{ text_color }}20;">
-                                <i class="fas {{ icon }} fa-2x" style="color: {{ text_color }};"></i>
-                            </div>
-                        </div>
-
-                        {# ORTA: DURUM MESAJI #}
-                        <div class="mb-3 px-2 py-1 rounded"
-                            style="background: rgba(0, 0, 0, 0.3); border-left: 3px solid {{ text_color }};">
-                            <div class="fw-bold text-uppercase"
-                                style="color: {{ text_color }}; font-size: 0.7rem; letter-spacing: 1px;">
-                                {{ status_text }}
-                            </div>
-                            <div class="text-truncate" style="color: #b0b3c5; font-size: 0.65rem;">
-                                {{ status_msg }}
-                            </div>
-                        </div>
-
-                        <div class="mt-auto d-flex flex-column gap-2">
-
-                            {# CRITICAL ROW #}
-                            <div class="d-flex align-items-center justify-content-between px-2 py-1 rounded"
-                                style="background: rgba(220, 53, 69, 0.1); border: 1px solid rgba(220, 53, 69, 0.25); {{ 'opacity: 0.4;' if ns.c_count == 0 }}">
-                                <div class="d-flex align-items-center">
-                                    <div
-                                        style="width: 6px; height: 6px; background-color: #dc3545; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 5px #dc3545;">
-                                    </div>
-                                    <span class="fw-bold text-uppercase"
-                                        style="color: #ff6b6b; font-size: 0.65rem; width: 55px;">Critical</span>
-                                    <span class="mx-1" style="color: rgba(255,255,255,0.2);">|</span>
-                                    <span style="color: #e2e8f0; font-size: 0.65rem;">{{ ns.c_count }} anomalies</span>
-                                </div>
-                                <span class="font-monospace fw-bold"
-                                    style="color: #ff6b6b; font-size: 0.7rem; text-shadow: 0 0 5px rgba(220, 53, 69, 0.5);">({{
-                                    ns.c_score }})</span>
-                            </div>
-
-                            {# HIGH ROW #}
-                            <div class="d-flex align-items-center justify-content-between px-2 py-1 rounded"
-                                style="background: rgba(255, 157, 0, 0.1); border: 1px solid rgba(255, 157, 0, 0.25); {{ 'opacity: 0.4;' if ns.h_count == 0 }}">
-                                <div class="d-flex align-items-center">
-                                    <div
-                                        style="width: 6px; height: 6px; background-color: #ff9d00; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 5px #ff9d00;">
-                                    </div>
-                                    <span class="fw-bold text-uppercase"
-                                        style="color: #ffb74d; font-size: 0.65rem; width: 55px;">High</span>
-                                    <span class="mx-1" style="color: rgba(255,255,255,0.2);">|</span>
-                                    <span style="color: #e2e8f0; font-size: 0.65rem;">{{ ns.h_count }} anomalies</span>
-                                </div>
-                                <span class="font-monospace fw-bold"
-                                    style="color: #ffb74d; font-size: 0.7rem; text-shadow: 0 0 5px rgba(255, 157, 0, 0.5);">({{
-                                    ns.h_score }})</span>
-                            </div>
-
-                            {# WARNING ROW #}
-                            <div class="d-flex align-items-center justify-content-between px-2 py-1 rounded"
-                                style="background: rgba(255, 247, 7, 0.05); border: 1px solid rgba(255, 247, 7, 0.2); {{ 'opacity: 0.4;' if ns.w_count == 0 }}">
-                                <div class="d-flex align-items-center">
-                                    <div
-                                        style="width: 6px; height: 6px; background-color: #fff707; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 5px #fff707;">
-                                    </div>
-                                    <span class="fw-bold text-uppercase"
-                                        style="color: #fffd8d; font-size: 0.65rem; width: 55px;">Warning</span>
-                                    <span class="mx-1" style="color: rgba(255,255,255,0.2);">|</span>
-                                    <span style="color: #e2e8f0; font-size: 0.65rem;">{{ ns.w_count }} anomalies</span>
-                                </div>
-                                <span class="font-monospace fw-bold"
-                                    style="color: #fffd8d; font-size: 0.7rem; text-shadow: 0 0 5px rgba(255, 247, 7, 0.5);">({{
-                                    ns.w_score }})</span>
-                            </div>
-
-                        </div>
-
-                    </div>
-            </div>
-        </div>
-
-        <div class="col-lg-3 col-md-6" style="height: 290px; flex:1.6;">
-            <div class="card h-100 cyber-card glass-panel">
-                <div class="card-header border-0 bg-transparent py-3 d-flex justify-content-between align-items-center">
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-bolt me-2" style="color: #ff0055; font-size: 0.9rem;"></i>
-                        <span class="fw-bold text-uppercase"
-                            style="color: #94a3b8; font-size: 0.75rem; letter-spacing: 0.5px;">
-                            ANOMALIES
-                        </span>
-                    </div>
-
-                    {% with count=data.alerts|length %}
-                    <span class="badge rounded-pill" style="
-      {% if count == 0 %}
-          background-color: rgba(0, 200, 0, 0.12);
-          color: #00b050;
-          border: 1px solid rgba(0, 200, 0, 0.4);
-      {% else %}
-          background-color: rgba(255, 0, 85, 0.12);
-          color: #ff0055;
-          border: 1px solid rgba(255, 0, 85, 0.4);
-      {% endif %}
-      font-size: 0.65rem;
-      padding: 4px 8px;
-      ">
-
-                        {% if count == 0 %}
-                        NO ANOMALY
-                        {% elif count == 1 %}
-                        1 ANOMALY
-                        {% else %}
-                        {{ count }} ANOMALIES
+                        {% elif alert.level|lower == 'warning' %}
+                        {% set ns.w_count = ns.w_count + 1 %}
+                        {% set ns.w_score = ns.w_score + current_score %}
+                        {% endif %}
+                        {% endfor %}
                         {% endif %}
 
-                    </span>
-                    {% endwith %}
+                        {% set calculated_total = ns.c_score + ns.h_score + ns.w_score %}
 
+                        {% if calculated_total > 100 %}
+                        {% set score = 100 %}
+                        {% else %}
+                        {% set score = calculated_total %}
+                        {% endif %}
 
-                </div>
-                <div class="card-body p-0 custom-scroll" style="overflow-y: auto;">
-                    {% if data.alerts %}
-                    <ul class="list-group list-group-flush bg-transparent">
-                        {% for alert in data.alerts %}
-                        <li class="list-group-item bg-transparent border-bottom border-secondary border-opacity-10 py-3 px-3"
-                            id="alert-card-{{ alert.id }}">
+                        {# --- RENK VE İKON AYARLARI --- #}
+                        {% set icon = 'fa-shield-virus' %}
 
-                            <div class="d-flex align-items-start">
-                                <div class="me-3 mt-1">
-                                    {% if alert.level == 'CRITICAL' %}
-                                    <i class="fas fa-radiation-alt fa-lg" style="color: #dc3545;"></i>
-                                    {% elif alert.level == 'HIGH' %}
-                                    <i class="fas fa-skull fa-lg" style="color: #ff9d00"></i>
-                                    {% elif alert.level == 'WARNING' %}
-                                    <i class="fas fa-fingerprint fa-lg" style="color: #fff707;"></i>
-                                    {% else %}
-                                    <i class="fas fa-search fa-lg" style="color: #0dcaf0;"></i>
-                                    {% endif %}
+                        {% if score == 0 %}
+                        {% set text_color = '#00ff88' %}
+                        {% set status_text = 'SYSTEM SECURE' %}
+                        {% set status_msg = 'All systems normal.' %}
+                        {% set icon = 'fa-shield-alt' %}
+
+                        {% elif score < 10 %} {% set text_color='#ccff00' %} {% set status_text='MINIMAL RISK' %} {% set
+                            status_msg='Negligible activity.' %} {% set icon='fa-eye' %} {% elif score < 20 %} {% set
+                            text_color='#eaff00' %} {% set status_text='LOW RISK' %} {% set
+                            status_msg='Minor anomalies.' %} {% set icon='fa-eye' %} {% elif score < 30 %} {% set
+                            text_color='#ffcc00' %} {% set status_text='ATTENTION' %} {% set
+                            status_msg='Suspicious patterns.' %} {% set icon='fa-exclamation' %} {% elif score < 40 %}
+                            {% set text_color='#ffaa00' %} {% set status_text='ELEVATED' %} {% set
+                            status_msg='Multiple warnings.' %} {% set icon='fa-exclamation-circle' %} {% elif score < 50
+                            %} {% set text_color='#ff7b00' %} {% set status_text='THREAT DETECTED' %} {% set
+                            status_msg='Potential intrusion.' %} {% set icon='fa-fire' %} {% elif score < 60 %} {% set
+                            text_color='#ff4000' %} {% set status_text='HIGH RISK' %} {% set
+                            status_msg='Protocol breach.' %} {% set icon='fa-virus' %} {% elif score < 70 %} {% set
+                            text_color='#ff0000' %} {% set status_text='DANGER' %} {% set status_msg='Active attack.' %}
+                            {% set icon='fa-radiation' %} {% elif score < 80 %} {% set text_color='#d60000' %} {% set
+                            status_text='CRITICAL FAILURE' %} {% set status_msg='Integrity compromised.' %} {% set
+                            icon='fa-radiation-alt' %} {% elif score < 90 %} {% set text_color='#900020' %} {% set
+                            status_text='SYSTEM BREACH' %} {% set status_msg='Data exfiltration risk.' %} {% set
+                            icon='fa-biohazard' %} {% else %} {% set text_color='#ff0055' %} {% set
+                            status_text='TOTAL COMPROMISE' %} {% set status_msg='IMMEDIATE ACTION.' %} {% set
+                            icon='fa-skull' %} {% endif %} <div
+                            class="card h-100 pulsing-card shadow-lg position-relative" style="--glow-color: {{ text_color }}30;
+                                --border-color-low: {{ text_color }}40;
+                                --border-color-high: {{ text_color }}80;
+                                background: radial-gradient(circle at 50% 20%, {{ text_color }}50 0%, #1b213b 90%);
+                                border: 1px solid {{ text_color }}40;
+                                transition: all 0.5s ease;
+                                overflow: hidden;">
+
+                            <div class="arc-reactor-wrapper"
+                                style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 100%; height: 100%; pointer-events: none; z-index: 0;">
+                                <div
+                                    style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 240px; height: 240px; border: 1px dashed {{ text_color }}; opacity: 0.1; border-radius: 50%; animation: arc-spin 20s linear infinite;">
                                 </div>
-                                <div class="flex-grow-1 me-2" style="min-width: 0;">
-                                    {% set parts = alert.title.split(':', 1) %}
-
-                                    <h6 class="mb-1 fw-bold text-white text-truncate" style="font-size: 0.8rem;">
-                                        {{ parts[0] }}
-                                    </h6>
-                                    <p class="mb-0 text-truncate"
-                                        style="color: #94a3b8; font-size: 0.7rem; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-                                        {% if parts|length > 1 %}
-                                        {{ parts[1] }}
-                                        {% else %}
-                                        {{ alert.description }}
-                                        {% endif %}
-                                    </p>
-                                    <div id="raw-details-{{ alert.id }}" style="display:none;">
-                                        {{ alert.details if alert.details else "No details." }}
-
-                                    </div>
+                                <div
+                                    style="position: absolute; top: 50%; left: 50%; width: 180px; height: 180px; border-radius: 50%; border: 1px solid transparent; border-top-color: {{ text_color }}; border-bottom-color: {{ text_color }}; opacity: 0.15; animation: arc-spin-reverse 10s linear infinite; transform: translate(-50%, -50%); margin-left: -90px; margin-top: -90px;">
                                 </div>
-
-                                <div class="d-flex align-items-center gap-1">
-
-                                    <button class="btn btn-sm p-1 d-flex justify-content-center align-items-center"
-                                        onclick="openDetailModal({{ alert.id }})"
-                                        style="width: 24px; height: 24px; border: 1px solid rgba(14, 165, 233, 0.3); background: rgba(14, 165, 233, 0.1); color: #38bdf8; font-size: 0.75rem;">
-                                        <i class="fas fa-code"></i>
-                                    </button>
-
-                                    <button class="btn btn-sm p-1 d-flex justify-content-center align-items-center"
-                                        onclick="resolveAlert({{ alert.id }})"
-                                        style="width: 24px; height: 24px; border: 1px solid rgba(34, 197, 94, 0.3); background: rgba(34, 197, 94, 0.1); color: #4ade80; font-size: 0.75rem;">
-                                        <i class="fas fa-check"></i>
-                                    </button>
-
-                                    <small class="fw-bold"
-                                        style="color: #64748b; font-size: 0.6rem; white-space: nowrap;">
-                                        {{ alert.timestamp.split('.')[0] }}
-                                    </small>
-
+                                <div
+                                    style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 120px; height: 120px; background: radial-gradient(circle, {{ text_color }}20 0%, transparent 70%); opacity: 0.4; animation: arc-pulse 3s ease-in-out infinite;">
                                 </div>
-
-
-
                             </div>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <div
-                        class="d-flex flex-column justify-content-center align-items-center h-100 text-center pb-3 pt-5">
-                        <div
-                            style="width: 50px; height: 50px; border-radius: 50%; background: rgba(0, 255, 136, 0.05); display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem;">
-                            <i class="fas fa-check" style="font-size: 1.2rem; color: #00ff88;"></i>
-                        </div>
-                        <h6 class="fw-bold text-white mb-0" style="font-size: 0.8rem;">System Clean</h6>
-                        <small style="color: #64748b; font-size: 0.65rem;">No anomalies detected.</small>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-3" style="height: 290px; flex:1.2;">
-            <div class="card h-100 border-0 glass-panel">
-                <div class="card-header border-0 bg-transparent py-3 d-flex justify-content-between align-items-center">
-                    <span class="text-uppercase fw-bold"
-                        style="color: #94a3b8; letter-spacing: 1px; font-size: 0.7rem;">
-                        <i class="fas fa-microchip me-2"></i> Active Processes
-                    </span>
-                    <span class="badge"
-                        style="background: rgba(255,255,255,0.05); color: #94a3b8; font-size: 0.6rem;">Top 8</span>
-                </div>
-
-                <div class="card-body p-2 custom-scroll" style="overflow-y: auto;">
-                    <div id="live-process-list" class="d-flex flex-column">
-                        {% for i in range(8) %}
-                        {% if analytics.top_processes and i < analytics.top_processes|length %} {% set
-                            proc=analytics.top_processes[i] %} {% set user_class='proc-user' %} {% if
-                            proc.username=='root' %} {% set user_class='proc-root' %} {% elif proc.username in
-                            ['system', 'network' , 'dbus' ] %} {% set user_class='proc-sys' %} {% endif %} {% set
-                            bar_color='#22c55e' %} {% set risk_badge='SAFE' %} {% set badge_bg='rgba(34, 197, 94, 0.1)'
-                            %} {% set badge_text='#22c55e' %} {% if proc.cpu_percent> 80 %}
-                            {% set bar_color = '#ef4444' %}
-                            {% set risk_badge = 'CRITICAL' %}
-                            {% set badge_bg = 'rgba(239, 68, 68, 0.2)' %}
-                            {% set badge_text = '#ef4444' %}
-                            {% elif proc.cpu_percent > 40 %}
-                            {% set bar_color = '#facc15' %}
-                            {% set risk_badge = 'WARN' %}
-                            {% set badge_bg = 'rgba(250, 204, 21, 0.1)' %}
-                            {% set badge_text = '#facc15' %}
-                            {% endif %}
-
-                            <div class="process-row">
-                                <div class="d-flex align-items-center" style="width: 40%;">
-                                    <i class="fas fa-cog me-2 {{ user_class }}" style="font-size: 0.7rem;"></i>
+                            <div class="card-body p-3 d-flex flex-column justify-content-between position-relative"
+                                style="z-index: 1;">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
                                     <div>
-                                        <div class="fw-bold text-white text-truncate"
-                                            style="font-size: 0.75rem; max-width: 80px;">{{ proc.name }}</div>
-                                        <div class="font-monospace text-muted" style="font-size: 0.6rem;">{{
-                                            proc.pid }}</div>
+                                        <h5 class="text-uppercase fw-bold mb-0"
+                                            style="color: rgba(255,255,255,0.8); letter-spacing: 1.5px; font-size: 0.8rem;">
+                                            Threat Percent
+                                        </h5>
+                                        <h1 class="display-4 fw-bold mb-0"
+                                            style="text-shadow: 0 0 25px {{ text_color }}; color: {{ text_color }}; font-family: 'Inter', sans-serif; line-height: 1;">
+                                            %{{ score }}
+                                        </h1>
+                                    </div>
+                                    <div
+                                        style="background: rgba(0,0,0,0.3); border-radius: 50%; padding: 0; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 20px {{ text_color }}30;">
+                                        <i class="fas {{ icon }} fa-2x" style="color: {{ text_color }};"></i>
                                     </div>
                                 </div>
-                                <div class="text-muted small text-truncate" style="width: 20%; font-size: 0.7rem;">
-                                    {{ proc.username }}</div>
-                                <div style="width: 35%;">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <span class="fw-bold" style="color: {{ bar_color }}; font-size: 0.7rem;">{{
-                                            proc.cpu_percent }}%</span>
-                                        <span
-                                            style="background: {{ badge_bg }}; color: {{ badge_text }}; padding: 1px 4px; border-radius: 4px; font-size: 0.55rem; font-weight: bold;">{{
-                                            risk_badge }}</span>
+                                <div class="mb-2 px-3 py-2 rounded"
+                                    style="background: rgba(0, 0, 0, 0.3); border-left: 4px solid {{ text_color }};">
+                                    <div class="fw-bold text-uppercase"
+                                        style="color: {{ text_color }}; font-size: 0.85rem; letter-spacing: 1px;">
+                                        {{ status_text }}
                                     </div>
-                                    <div class="cpu-track">
-                                        <div class="cpu-fill"
-                                            style="width: {{ proc.cpu_percent }}%; background-color: {{ bar_color }};">
+                                    <div class="" style="color: #b0b3c5; font-size: 0.75rem;">
+                                        {{ status_msg }}
+                                    </div>
+                                </div>
+                                <div class="mt-auto pt-1">
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <span class="text-muted text-uppercase fw-bold"
+                                            style="font-size: 0.6rem; letter-spacing: 1px;">Breakdown</span>
+                                        <div
+                                            style="height: 1px; flex-grow: 1; background: rgba(255,255,255,0.1); margin-left: 10px;">
+                                        </div>
+                                    </div>
+                                    <div class="row g-2">
+                                        <div class="col-4">
+                                            <div class="h-100 p-1 rounded d-flex flex-column align-items-center justify-content-center text-center position-relative overflow-hidden"
+                                                style="
+                                                    background: rgba(220, 53, 69, 0.05);
+                                                    border: 1px solid rgba(220, 53, 69, 0.2);
+                                                    min-height: 60px;
+                                                    {{ 'opacity: 0.3; filter: grayscale(1);' if ns.c_count == 0 else 'box-shadow: inset 0 0 10px rgba(220, 53, 69, 0.1); border-color: rgba(220, 53, 69, 0.4);' }}">
+
+                                                <div class="position-absolute top-0 start-0 w-100"
+                                                    style="height: 2px; background: #dc3545; opacity: {{ '0' if ns.c_count == 0 else '0.8' }}">
+                                                </div>
+
+                                                <div class="small fw-bold text-uppercase mb-0"
+                                                    style="color: #ff6b6b; font-size: 0.6rem; letter-spacing: 0.5px;">
+                                                    CRITICAL
+                                                </div>
+
+                                                <div class="font-monospace fw-bold text-white lh-1 mb-0"
+                                                    style="font-size: 1.2rem;">
+                                                    {{ ns.c_count }}
+                                                </div>
+
+                                                <div class="small font-monospace"
+                                                    style="color: rgba(220, 53, 69, 0.7); font-size: 0.55rem;">
+                                                    SCR: {{ ns.c_score }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="h-100 p-1 rounded d-flex flex-column align-items-center justify-content-center text-center position-relative overflow-hidden"
+                                                style="
+                                                    background: rgba(255, 157, 0, 0.05);
+                                                    border: 1px solid rgba(255, 157, 0, 0.2);
+                                                    min-height: 60px;
+                                                    {{ 'opacity: 0.3; filter: grayscale(1);' if ns.h_count == 0 else 'box-shadow: inset 0 0 10px rgba(255, 157, 0, 0.1); border-color: rgba(255, 157, 0, 0.4);' }}">
+
+                                                <div class="position-absolute top-0 start-0 w-100"
+                                                    style="height: 2px; background: #ff9d00; opacity: {{ '0' if ns.h_count == 0 else '0.8' }}">
+                                                </div>
+
+                                                <div class="small fw-bold text-uppercase mb-0"
+                                                    style="color: #ffb74d; font-size: 0.6rem; letter-spacing: 0.5px;">
+                                                    HIGH
+                                                </div>
+
+                                                <div class="font-monospace fw-bold text-white lh-1 mb-0"
+                                                    style="font-size: 1.2rem;">
+                                                    {{ ns.h_count }}
+                                                </div>
+
+                                                <div class="small font-monospace"
+                                                    style="color: rgba(255, 157, 0, 0.7); font-size: 0.55rem;">
+                                                    SCR: {{ ns.h_score }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-4">
+                                            <div class="h-100 p-1 rounded d-flex flex-column align-items-center justify-content-center text-center position-relative overflow-hidden"
+                                                style="
+                                                    background: rgba(255, 247, 7, 0.05);
+                                                    border: 1px solid rgba(255, 247, 7, 0.2);
+                                                    min-height: 60px;
+                                                    {{ 'opacity: 0.3; filter: grayscale(1);' if ns.w_count == 0 else 'box-shadow: inset 0 0 10px rgba(255, 247, 7, 0.1); border-color: rgba(255, 247, 7, 0.4);' }}">
+
+                                                <div class="position-absolute top-0 start-0 w-100"
+                                                    style="height: 2px; background: #fff707; opacity: {{ '0' if ns.w_count == 0 else '0.8' }}">
+                                                </div>
+
+                                                <div class="small fw-bold text-uppercase mb-0"
+                                                    style="color: #fffd8d; font-size: 0.6rem; letter-spacing: 0.5px;">
+                                                    WARNING
+                                                </div>
+
+                                                <div class="font-monospace fw-bold text-white lh-1 mb-0"
+                                                    style="font-size: 1.2rem;">
+                                                    {{ ns.w_count }}
+                                                </div>
+                                                <div class="small font-monospace"
+                                                    style="color: rgba(255, 247, 7, 0.7); font-size: 0.55rem;">
+                                                    SCR: {{ ns.w_score }}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
+                    </div>
+                </div>
+                <div class="col-lg-5 col-md-6" style="height: 320px;">
+                    <div class="card h-100 border-0 glass-panel" style="overflow: hidden;">
+                        <div class="card-header border-0 bg-transparent py-3 d-flex justify-content-between align-items-center"
+                            style="background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-bolt me-2" style="color: #ff0055; font-size: 0.9rem;"></i>
+                                <span class="fw-bold text-uppercase"
+                                    style="color: #94a3b8; font-size: 0.75rem; letter-spacing: 1px;">
+                                    Detected Anomalies
+                                </span>
+                            </div>
+
+                            {% with count=data.alerts|length %}
+                            <span class="badge" style="
+                                    background: rgba(15, 23, 42, 0.6); 
+                                    border: 1px solid rgba(255, 255, 255, 0.1); 
+                                    color: #94a3b8; 
+                                    font-size: 0.8rem; 
+                                    font-family: monospace;">
+                                TOTAL: <span class="text-white">{{ count }}</span>
+                            </span>
+                            {% endwith %}
+                        </div>
+                        <div class="card-body p-2 pt-0 custom-scroll" style="overflow-y: auto;">
+                            {% if data.alerts %}
+                            <div class="d-flex flex-column gap-2 mt-1">
+                                {% for alert in data.alerts %}
+
+                                {# --- RENK VE STİL AYARLARI --- #}
+                                {% set is_critical = (alert.level == 'CRITICAL') %}
+                                {% set is_high = (alert.level == 'HIGH') %}
+
+                                {% set theme_color = '#0dcaf0' %}
+                                {% set pulse_class = '' %}
+
+                                {% if is_critical %}
+                                {% set theme_color = '#ff0055' %}
+                                {% set pulse_class = 'critical-pulse' %}
+                                {% elif is_high %}
+                                {% set theme_color = '#ff9d00' %}
+                                {% elif alert.level == 'WARNING' %}
+                                {% set theme_color = '#facc15' %}
+                                {% endif %}
+
+                                <div class="d-flex align-items-stretch rounded overflow-hidden position-relative {{ pulse_class }}"
+                                    id="alert-card-{{ alert.id }}" style="background: linear-gradient(90deg, rgba(15, 23, 42, 0.8) 0%, rgba(30, 41, 59, 0.4) 100%); 
+                                                    border: 1px solid rgba(255,255,255,0.05); 
+                                                    border-left: 4px solid {{ theme_color }}; 
+                                                    transition: all 0.3s ease;
+                                                    min-height: 75px;">
+
+                                    <div class="p-2 ps-3 flex-grow-1 d-flex flex-column justify-content-center"
+                                        style="min-width: 0;">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <h6 class="mb-0 fw-bold text-white text-truncate me-2"
+                                                style="font-size: 0.75rem; letter-spacing: 0.3px;">
+                                                {{ alert.title.split(':')[0] }}
+                                            </h6>
+                                            <span class="badge rounded-1 px-2"
+                                                style="background: {{ theme_color }}15; color: {{ theme_color }}; font-size: 0.5rem; border: 1px solid {{ theme_color }}30; font-weight: 600;">
+                                                {{ alert.level }}
+                                            </span>
+                                        </div>
+                                        <div class="text-truncate font-monospace"
+                                            style="color: #64748b; font-size: 0.65rem; margin-bottom: 6px;">
+                                            {% set parts = alert.title.split(':', 1) %}
+                                            {% if parts|length > 1 %} {{ parts[1] }} {% else %} {{ alert.description }}
+                                            {% endif
+                                            %}
+                                        </div>
+                                        <div class="d-flex align-items-center">
+                                            <div class="d-flex align-items-center px-2 py-1 rounded"
+                                                style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.05);">
+                                                <i class="far fa-clock me-2"
+                                                    style="font-size: 0.6rem; color: #64748b;"></i>
+                                                <span class="font-monospace"
+                                                    style="font-size: 0.65rem; color: #94a3b8; letter-spacing: 0.5px;">
+                                                    {{ alert.timestamp.split('.')[0] }}
+                                                </span>
+                                            </div>
+                                            <div id="raw-details-{{ alert.id }}" style="display:none;">
+                                                {{ alert.details if alert.details else "No details." }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-column border-start border-secondary border-opacity-10"
+                                        style="width: 36px;">
+                                        <button
+                                            class="btn btn-sm h-50 w-100 p-0 d-flex justify-content-center align-items-center text-info hover-bg-info"
+                                            onclick="openDetailModal({{ alert.id }})" title="Inspect"
+                                            style="border-radius: 0; border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(13, 202, 240, 0.05);">
+                                            <i class="fas fa-terminal" style="font-size: 0.75rem;"></i>
+                                        </button>
+
+                                        <button
+                                            class="btn btn-sm h-50 w-100 p-0 d-flex justify-content-center align-items-center text-success hover-bg-success"
+                                            onclick="resolveAlert({{ alert.id }})" title="Resolve"
+                                            style="border-radius: 0; background: rgba(34, 197, 94, 0.05);">
+                                            <i class="fas fa-check" style="font-size: 0.75rem;"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
                             {% else %}
-                            <div class="process-row" style="opacity: 0.3;">
-                                <span class="text-muted small">-</span>
+                            <div class="d-flex flex-column justify-content-center align-items-center h-100 pb-4"
+                                style="opacity: 0.6;">
+                                <div class="p-3 rounded-circle mb-2"
+                                    style="background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2);">
+                                    <i class="fas fa-shield-cat text-success" style="font-size: 1.5rem;"></i>
+                                </div>
+                                <span class="text-muted small fw-bold" style="letter-spacing: 1px;">SYSTEM SECURE</span>
                             </div>
                             {% endif %}
-                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6" style="height: 320px;">
+                    <!-- Kalıp artık sol taraftaki Anomalies kartı ile birebir aynı -->
+                    <div class="card h-100 border-0 glass-panel" style="overflow: hidden;">
+
+                        <!-- Header gradyanı ve stili Anomalies ile eşitlendi -->
+                        <div class="card-header border-0 bg-transparent py-3 d-flex justify-content-between align-items-center"
+                            style="background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);">
+                            <div class="d-flex align-items-center">
+                                <div class="me-2"
+                                    style="width: 3px; height: 14px; background: #ef4444; border-radius: 2px; box-shadow: 0 0 8px rgba(239,68,68,0.5);">
+                                </div>
+                                <span class="text-uppercase fw-bold"
+                                    style="color: #94a3b8; font-size: 0.75rem; letter-spacing: 1px;">
+                                    FIREWALL DEFENSE
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="card-body p-0 custom-scroll" style="overflow-y: auto;">
+                            <div class="d-flex flex-column">
+                                <div
+                                    class="fw-row d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-black border-opacity-20">
+                                    <span
+                                        style="font-size: 0.65rem; color: #64748b; font-weight: bold; letter-spacing: 1px;">STATUS</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span
+                                            class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-20"
+                                            style="font-size: 0.55rem;">UFW</span>
+                                        <span class="text-muted font-monospace"
+                                            style="font-size: 0.7rem;">v.0.36.1</span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="fw-row d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-black border-opacity-20">
+                                    <span
+                                        style="font-size: 0.65rem; color: #64748b; font-weight: bold; letter-spacing: 1px;">ENGINE</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span
+                                            class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-20"
+                                            style="font-size: 0.55rem;">UFW</span>
+                                        <span class="text-muted font-monospace"
+                                            style="font-size: 0.7rem;">v.0.36.1</span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="fw-row d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-black border-opacity-20">
+                                    <span
+                                        style="font-size: 0.65rem; color: #64748b; font-weight: bold; letter-spacing: 1px;">MANAGER</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span
+                                            class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-20"
+                                            style="font-size: 0.55rem;">UFW</span>
+                                        <span class="text-muted font-monospace"
+                                            style="font-size: 0.7rem;">v.0.36.1</span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="fw-row d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-black border-opacity-20">
+                                    <span
+                                        style="font-size: 0.65rem; color: #64748b; font-weight: bold; letter-spacing: 1px;">INBOUND</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span
+                                            class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-20"
+                                            style="font-size: 0.55rem;">UFW</span>
+                                        <span class="text-muted font-monospace"
+                                            style="font-size: 0.7rem;">v.0.36.1</span>
+                                    </div>
+                                </div>
+                                <div
+                                    class="fw-row d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-black border-opacity-20">
+                                    <span
+                                        style="font-size: 0.65rem; color: #64748b; font-weight: bold; letter-spacing: 1px;">OUTBOUND</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span
+                                            class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-20"
+                                            style="font-size: 0.55rem;">UFW</span>
+                                        <span class="text-muted font-monospace"
+                                            style="font-size: 0.7rem;">v.0.36.1</span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="fw-row d-flex justify-content-between align-items-center px-3 py-2 border-bottom border-black border-opacity-20">
+                                    <span
+                                        style="font-size: 0.65rem; color: #64748b; font-weight: bold; letter-spacing: 1px;">LOG
+                                        VERBOSITY</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span
+                                            class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-20"
+                                            style="font-size: 0.55rem;">UFW</span>
+                                        <span class="text-muted font-monospace"
+                                            style="font-size: 0.7rem;">v.0.36.1</span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    class="fw-row d-flex justify-content-between align-items-center px-3 py-2">
+                                    <span
+                                        style="font-size: 0.65rem; color: #64748b; font-weight: bold; letter-spacing: 1px;">POLICIES</span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span
+                                            class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-20"
+                                            style="font-size: 0.55rem;">UFW</span>
+                                        <span class="text-muted font-monospace"
+                                            style="font-size: 0.7rem;">v.0.36.1</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-lg-8 d-flex flex-column">
+                        <div class="card h-100 border-0 glass-panel">
+                            <div
+                                class="card-header border-0 bg-transparent py-2 d-flex justify-content-between align-items-center">
+                                <span class="text-info fw-bold small">
+                                    <i class="fas fa-wave-square me-2"></i>TRAFFIC CONTEXT (Baseline vs Current)
+                                </span>
+                                <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25"
+                                    style="font-size: 0.6rem;">
+                                    LIVE MONITOR
+                                </span>
+                            </div>
+                            <div class="card-body p-2">
+                                <div style="height: 250px; width: 100%;">
+                                    <canvas id="firewallTrafficChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4 d-flex flex-column">
+                        <div class="card h-100 border-0 glass-panel">
+                            <div
+                                class="card-header border-0 bg-transparent py-2 d-flex justify-content-between align-items-center">
+                                <span class="text-uppercase fw-bold"
+                                    style="color: #94a3b8; letter-spacing: 1px; font-size: 0.7rem;">
+                                    <i class="fas fa-microchip me-2 text-info"></i> Processes Worth Attention
+                                </span>
+
+                                {% set high_load_count = 0 %}
+                                {% for p in analytics.top_processes %}
+                                {% if p.cpu_percent > 10 or p.memory_percent > 10 %}
+                                {% set high_load_count = high_load_count + 1 %}
+                                {% endif %}
+                                {% endfor %}
+
+                                {% if high_load_count > 0 %}
+                                <span class="badge bg-warning text-dark blink-soft" style="font-size: 0.6rem;">
+                                    <i class="fas fa-exclamation-circle me-1"></i>{{ high_load_count }} Heavy Load
+                                </span>
+                                {% else %}
+                                <span class="badge"
+                                    style="background: rgba(34, 197, 94, 0.1); color: #22c55e; font-size: 0.6rem;">
+                                    <i class="fas fa-check-circle me-1"></i>Nominal
+                                </span>
+                                {% endif %}
+                            </div>
+
+                            <div class="d-flex px-3 mb-2 border-bottom border-secondary border-opacity-10 pb-1">
+                                <div style="width: 45%;" class="text-muted fw-bold small" style="font-size: 0.6rem;">
+                                    PROCESS / PID</div>
+                                <div style="width: 20%;" class="text-muted fw-bold small text-center"
+                                    style="font-size: 0.6rem;">USER</div>
+                                <div style="width: 35%;" class="text-muted fw-bold small text-end pe-2"
+                                    style="font-size: 0.6rem;">CPU | RAM</div>
+                            </div>
+
+                            <!-- SCROLLBAR VE SINIRSIZ LİSTE BURADA -->
+                            <div class="card-body p-2 pt-0 custom-scroll" style="overflow-y: auto; max-height: 250px;">
+                                <div id="live-process-list" class="d-flex flex-column gap-1">
+                                    {% for proc in analytics.top_processes %}
+
+                                    {# SADECE KAYNAK TÜKETENLERİ GÖSTER FİLTRESİ #}
+                                    {% if proc.cpu_percent > 0.1 or proc.memory_percent > 0.1 %}
+
+                                    {% set is_heavy=(proc.cpu_percent > 25 or proc.memory_percent > 25) %}
+                                    {% set is_suspicious_user = (proc.username not in ['root', 'system', 'daemon',
+                                    'messagebus']) %}
+
+                                    {% set row_opacity = '1' if (is_heavy or is_suspicious_user) else '0.4' %}
+                                    {% set row_bg = 'linear-gradient(90deg, rgba(255, 72, 0, 0.15) 0%, rgba(255, 72, 0,
+                                    0.0) 100%)' if is_heavy else 'transparent' %}
+                                    {% set border_style = 'border-left: 3px solid #ff4800;' if is_heavy else
+                                    'border-left: 3px solid transparent;' %}
+
+                                    {% set user_icon = 'fa-shield-alt' if proc.username == 'root' else 'fa-user' %}
+                                    {% set user_color = '#dc3545' if proc.username == 'root' else '#38bdf8' %}
+
+                                    {% set bar_color = '#22c55e' %}
+                                    {% if proc.cpu_percent > 50 %} {% set bar_color = '#ef4444' %}
+                                    {% elif proc.cpu_percent > 20 %} {% set bar_color = '#facc15' %}
+                                    {% endif %}
+
+                                    <div class="process-item p-2 rounded d-flex align-items-center"
+                                        title="Path: /proc/{{ proc.pid }}/exe"
+                                        style="opacity: {{ row_opacity }}; background: {{ row_bg }}; {{ border_style }} position: relative; margin-bottom: 2px;">
+
+                                        <div style="width: 45%; min-width: 0;">
+                                            <div class="d-flex align-items-center mb-1">
+                                                <span class="fw-bold text-white text-truncate me-2"
+                                                    style="font-size: 0.8rem;">
+                                                    {{ proc.name.split(' ')[0] }}
+                                                </span>
+                                                {% if '(' in proc.name %}
+                                                <span
+                                                    class="badge bg-secondary bg-opacity-25 text-white border border-secondary border-opacity-25 rounded-pill me-2"
+                                                    style="font-size: 0.55rem; padding: 2px 5px; color: white !important;">
+                                                    {{ proc.name.split('(')[1].split(')')[0] }}
+                                                </span>
+                                                {% endif %}
+                                                <span class="font-monospace small"
+                                                    style="font-size: 0.85rem; color: rgb(141, 141, 141);">#{{ proc.pid
+                                                    }}</span>
+                                            </div>
+                                        </div>
+
+                                        <div style="width: 20%;"
+                                            class="d-flex justify-content-center align-items-center">
+                                            <div class="d-flex align-items-center gap-1"
+                                                style="padding: 3px 6px; min-width: 50px; justify-content: center;">
+                                                <i class="fas {{ user_icon }}"
+                                                    style="font-size: 0.55rem; color: {{ user_color }};"></i>
+                                                <span style="font-size: 0.8rem; color: #94a3b8;">{{ proc.username[:5]
+                                                    }}</span>
+                                            </div>
+                                        </div>
+
+                                        <div style="width: 35%;"
+                                            class="d-flex justify-content-end align-items-center gap-2">
+                                            <div class="text-end">
+                                                <div class="font-monospace fw-bold"
+                                                    style="color: {{ bar_color }}; font-size: 0.75rem;">
+                                                    {{ proc.cpu_percent }}%
+                                                </div>
+                                            </div>
+                                            <div style="width: 1px; height: 16px; background: rgba(255,255,255,0.1);">
+                                            </div>
+                                            <div class="text-end">
+                                                <div class="font-monospace fw-bold"
+                                                    style="color: #38bdf8; font-size: 0.75rem;">
+                                                    {{ proc.memory_percent|round(1) }}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="col-lg-3" style="height: 290px; flex:0.85;">
-            <div class="card h-80">
-                <div class="card-header py-1" style="font-size: 0.7rem;">System Stats</div>
-                <div class="card-body p-0 d-flex align-items-center">
-                    <div class="row w-100 m-0">
-
-                        <div class="col-4 border-end p-2 d-flex align-items-center justify-content-center">
-                            <i class="fas fa-microchip text-primary fs-4 me-2 opacity-75""></i>
-                                <div class=" lh-1">
-                                <div class="fw-bold" id="live-cpu-text" style="font-size: 0.85rem;">%{{
-                                    data.metrics.cpu_usage }}</div>
-                                <div class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">CPU</div>
+        <div class="d-flex flex-column" style="width: 300px; flex-shrink: 0;">
+            <div class="card border-0 glass-panel" style="height: fit-content; min-height: 0; flex-shrink: 0;">
+                <div class="card-header border-0 bg-transparent py-2">
+                    <span class="text-uppercase fw-bold"
+                        style="color: #94a3b8; letter-spacing: 1px; font-size: 0.7rem;">
+                        <i class="fas fa-server me-2 text-info"></i> System Monitor
+                    </span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="d-flex align-items-center justify-content-center py-3">
+                        <div class="row w-100 m-0">
+                            <div
+                                class="col-4 border-end border-secondary border-opacity-10 p-0 d-flex align-items-center justify-content-center flex-column">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="fas fa-microchip text-primary me-2 opacity-75"
+                                        style="font-size: 1rem;"></i>
+                                    <div class="lh-1">
+                                        <div class="fw-bold text-white" id="live-cpu-text" style="font-size: 0.8rem;">
+                                            %{{ data.metrics.cpu_usage }}</div>
+                                    </div>
+                                </div>
+                                <div class="text-muted text-uppercase fw-bold" style="font-size: 0.55rem;">CPU</div>
+                            </div>
+                            <div
+                                class="col-4 border-end border-secondary border-opacity-10 p-0 d-flex align-items-center justify-content-center flex-column">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="fas fa-memory text-info me-2 opacity-75" style="font-size: 1rem;"></i>
+                                    <div class="lh-1">
+                                        <div class="fw-bold text-white" id="live-ram-text" style="font-size: 0.8rem;">
+                                            %{{ data.metrics.ram_usage }}</div>
+                                    </div>
+                                </div>
+                                <div class="text-muted text-uppercase fw-bold" style="font-size: 0.55rem;">RAM</div>
+                            </div>
+                            <div class="col-4 p-0 d-flex align-items-center justify-content-center flex-column">
+                                <div class="d-flex align-items-center mb-1">
+                                    <i class="fas fa-hdd text-warning me-2 opacity-75" style="font-size: 1rem;"></i>
+                                    <div class="lh-1">
+                                        <div class="fw-bold text-white" style="font-size: 0.8rem;">%{{
+                                            data.metrics.disk_usage }}</div>
+                                    </div>
+                                </div>
+                                <div class="text-muted text-uppercase fw-bold" style="font-size: 0.55rem;">DISK</div>
+                            </div>
                         </div>
                     </div>
-                    <div class="col-4 border-end p-2 d-flex align-items-center justify-content-center">
-                        <i class="fas fa-memory text-info fs-4 me-2 opacity-75"></i>
-                        <div class="lh-1">
-                            <div class="fw-bold" id="live-ram-text" style="font-size: 0.85rem;">%{{
-                                data.metrics.ram_usage }}</div>
-                            <div class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">RAM</div>
-                        </div>
-                    </div>
-                    <div class="col-4 p-2 d-flex align-items-center justify-content-center">
-                        <i class="fas fa-hdd text-warning fs-4 me-2 opacity-75"></i>
-                        <div class="lh-1">
-                            <div class="fw-bold" style="font-size: 0.85rem;">%{{ data.metrics.disk_usage }}</div>
-                            <div class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">DISK</div>
-                        </div>
-                    </div>
-
                 </div>
             </div>
-        </div>
-        <div class="card border-0 glass-panel" style="height: 200px; overflow: hidden;">
-            <div class="card-header border-0 bg-transparent py-2">
-                <div class="d-flex justify-content-between align-items-center mb-1">
+
+            <div class="card border-0 glass-panel">
+                <div class="card-header border-0 bg-transparent py-2 border-bottom border-secondary border-opacity-10">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-network-wired text-info me-2"></i>
+                        <span class="fw-bold text-white small text-uppercase" style="letter-spacing: 1px;">NETWORK
+                            TRAFFIC ANALYSIS</span>
+                    </div>
+                </div>
+
+                <div class="card-body p-3 d-flex flex-column justify-content-center gap-3">
+                    <div class="p-2 rounded position-relative overflow-hidden d-flex align-items-center"
+                        style="background: linear-gradient(90deg, rgba(13, 202, 240, 0.1) 0%, rgba(13, 202, 240, 0.01) 100%); border-left: 3px solid #0dcaf0; min-height: 70px;">
+                        <div style="min-width: 80px; z-index: 2;">
+                            <span class="text-info fw-bold small text-uppercase"
+                                style="font-size: 0.8rem; letter-spacing: 0.5px;">INTERNAL</span>
+                            <div class="d-flex align-items-baseline">
+                                <h4 class="fw-bold text-white mb-0 me-1" id="int-val">0</h4>
+                            </div>
+                        </div>
+
+                        <div class="d-flex flex-grow-1 justify-content-center align-items-center gap-3"
+                            style="z-index: 2;">
+                            <div class="d-flex flex-column text-center">
+                                <span class="fw-bold font-monospace text-success"
+                                    style="font-size: 1rem; line-height: 1;" id="int-allow">0</span>
+                                <span class="text-muted text-uppercase"
+                                    style="font-size: 0.55rem; letter-spacing: 0.5px; margin-top: 2px;">ALLOW</span>
+                            </div>
+                            <div style="width: 1px; height: 25px; background: rgba(255,255,255,0.1);"></div>
+                            <div class="d-flex flex-column text-center">
+                                <span class="fw-bold font-monospace text-danger"
+                                    style="font-size: 1rem; line-height: 1;" id="int-block">0</span>
+                                <span class="text-muted text-uppercase"
+                                    style="font-size: 0.55rem; letter-spacing: 0.5px; margin-top: 2px;">BLOCK</span>
+                            </div>
+                            <div style="width: 1px; height: 25px; background: rgba(255,255,255,0.1);"></div>
+                            <div class="d-flex flex-column text-center">
+                                <span class="fw-bold font-monospace text-warning"
+                                    style="font-size: 1rem; line-height: 1;" id="int-drop">0</span>
+                                <span class="text-muted text-uppercase"
+                                    style="font-size: 0.55rem; letter-spacing: 0.5px; margin-top: 2px;">DROP</span>
+                            </div>
+                        </div>
+                        <i class="fas fa-project-diagram position-absolute"
+                            style="right: 10px; bottom: -20px; font-size: 7rem; color: #0dcaf0; opacity: 0.05;"></i>
+                    </div>
+
+                    <div class="p-2 rounded position-relative overflow-hidden d-flex align-items-center"
+                        style="background: linear-gradient(90deg, rgba(255, 193, 7, 0.1) 0%, rgba(255, 193, 7, 0.01) 100%); border-left: 3px solid #ffc107; min-height: 70px;">
+                        <div style="min-width: 80px; z-index: 2;">
+                            <span class="text-warning fw-bold small text-uppercase"
+                                style="font-size: 0.8rem; letter-spacing: 0.5px;">EXTERNAL</span>
+                            <div class="d-flex align-items-baseline">
+                                <h4 class="fw-bold text-white mb-0 me-1" id="ext-val">0</h4>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-grow-1 justify-content-center align-items-center gap-3"
+                            style="z-index: 2;">
+                            <div class="d-flex flex-column text-center">
+                                <span class="fw-bold font-monospace text-success"
+                                    style="font-size: 1rem; line-height: 1;" id="ext-allow">0</span>
+                                <span class="text-muted text-uppercase"
+                                    style="font-size: 0.55rem; letter-spacing: 0.5px; margin-top: 2px;">ALLOW</span>
+                            </div>
+                            <div style="width: 1px; height: 25px; background: rgba(255,255,255,0.1);"></div>
+                            <div class="d-flex flex-column text-center">
+                                <span class="fw-bold font-monospace text-danger"
+                                    style="font-size: 1rem; line-height: 1;" id="ext-block">0</span>
+                                <span class="text-muted text-uppercase"
+                                    style="font-size: 0.55rem; letter-spacing: 0.5px; margin-top: 2px;">BLOCK</span>
+                            </div>
+                            <div style="width: 1px; height: 25px; background: rgba(255,255,255,0.1);"></div>
+                            <div class="d-flex flex-column text-center">
+                                <span class="fw-bold font-monospace text-warning"
+                                    style="font-size: 1rem; line-height: 1;" id="ext-drop">0</span>
+                                <span class="text-muted text-uppercase"
+                                    style="font-size: 0.55rem; letter-spacing: 0.5px; margin-top: 2px;">DROP</span>
+                            </div>
+                        </div>
+                        <i class="fas fa-globe position-absolute"
+                            style="right: 10px; bottom: -30px; font-size: 10em; color: #ffc107; opacity: 0.05;"></i>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-0 glass-panel" style="flex-grow: 1;">
+                <div class="card-header border-0 bg-transparent py-3 d-flex justify-content-between align-items-center">
+                    <span class="text-uppercase fw-bold"
+                        style="color: #94a3b8; letter-spacing: 1px; font-size: 0.7rem;">
+                        <i class="fas fa-network-wired me-2"></i> OPEN
+                    </span>
                     <div class="d-flex align-items-center gap-2">
-                        <span class="text-uppercase fw-bold"
-                            style="color: #94a3b8; letter-spacing: 1px; font-size: 0.7rem;">
-                            <i class="fas fa-network-wired me-2"></i> Open Ports
-                        </span>
+                        {% if data.metrics.port_list.exposed_details %}
+                        <button type="button" class="btn btn-sm btn-warning py-0 px-2 d-flex align-items-center gap-1"
+                            style="font-size: 0.6rem;" data-bs-toggle="popover" data-bs-placement="bottom"
+                            data-bs-custom-class="custom-popover" data-bs-trigger="focus"
+                            title="<i class='fas fa-exclamation-triangle text-warning me-2'></i> Exposed Port Analysis"
+                            data-bs-html="true" data-bs-content="
+                                <ul class='list-unstyled mb-0 small'>
+                                {% for item in data.metrics.port_list.exposed_details %}
+                                    <li class='mb-2 pb-2 border-bottom border-secondary border-opacity-25'>
+                                        <strong class='text-warning d-block'>{{ item.port }} - {{ item.service }}</strong>
+                                        <span class='text-muted'>{{ item.explanation }}</span>
+                                    </li>
+                                {% endfor %}
+                                </ul>
+                            ">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>{{ data.metrics.port_list.exposed_details|length }}</span>
+                        </button>
+                        {% endif %}
+                        <span class="badge"
+                            style="background: rgba(255,255,255,0.05); color: #fff; font-size: 0.75rem;">{{
+                            data.metrics.port_list.port_list|length }} Active</span>
                     </div>
                 </div>
-            </div>
-            <div class="card-body pt-0 pb-2 px-2 custom-scroll" style="overflow-y: auto;">
-                {% if data.metrics.port_list %}
-                <div class="d-flex flex-column gap-1">
-                    {% for port in data.metrics.port_list %}
-                    <div class="port-item d-flex align-items-center justify-content-between px-1 py-1">
-                        <div class="d-flex align-items-center" style="min-width: 0;">
-                            <div class="me-2 text-center rounded p-1"
-                                style="background: rgba(255, 255, 255, 0.05); min-width: 75px; flex-shrink: 0;">
-                                <div class="fw-bold text-white font-monospace" style="font-size: 0.75rem;">{{
-                                    port.port }}</div>
-                            </div>
-                            <div style="min-width: 0; margin-right: 5px;">
-                                <div class="text-uppercase fw-bold text-white text-truncate" style="font-size: 0.7rem;">
-                                    {{ port.service }}</div>
+                <div class="card-body p-3 pt-0 d-flex flex-column" style="overflow-y: auto;">
+                    {% if data.metrics.port_list.port_list %}
+                    <div class="d-flex flex-column gap-3">
+                        {% for port in data.metrics.port_list.port_list %}
+
+                        {# --- RENK VE ARKA PLAN AYARLARI --- #}
+                        {% set is_exposed = (port.status == 'EXPOSED') %}
+
+                        {# Kart Arka Planı #}
+                        {% set card_bg = 'background: linear-gradient(90deg, rgba(255,255,255,0.03) 0%,
+                        rgba(255,255,255,0) 100%); border: 1px solid rgba(255,255,255,0.05);' %}
+                        {% set status_color = '#22c55e' %} {# Varsayılan Yeşil #}
+                        {% set glow_color = 'rgba(34, 197, 94, 0.5)' %}
+
+                        {% if is_exposed %}
+                        {% set card_bg = 'background: linear-gradient(90deg, rgba(234, 179, 8, 0.1) 0%, rgba(234, 179,
+                        8, 0.01) 100%); border: 1px solid rgba(234, 179, 8, 0.2); border-left: 3px solid #facc15;' %}
+                        {% set status_color = '#facc15' %} {# Sarı #}
+                        {% set glow_color = 'rgba(250, 204, 21, 0.5)' %}
+                        {% else %}
+                        {% set card_bg = card_bg + ' border-left: 3px solid #0dcaf0;' %}
+                        {% endif %}
+
+                        <div class="p-2 rounded position-relative" style="{{ card_bg }} transition: all 0.2s ease;">
+                            <div class="d-flex align-items-center gap-2">
+
+                                <div class="d-flex align-items-center justify-content-center rounded flex-shrink-0"
+                                    style="width: 50px; height: 35px; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.1); box-shadow: inset 0 0 15px rgba(0,0,0,0.8);">
+                                    <span class="font-monospace fw-bold text-white"
+                                        style="font-size: .8rem; letter-spacing: -0.5px;">
+                                        {{ port.port }}
+                                    </span>
+                                </div>
+
+                                <div class="d-flex flex-column justify-content-center flex-grow-1"
+                                    style="min-width: 0;">
+
+                                    <span class="fw-bold text-white text-uppercase mb-2"
+                                        style="font-size: 0.65rem; letter-spacing: 0.5px;">
+                                        {{ port.service }}
+                                    </span>
+
+                                    <div class="d-flex align-items-center gap-2">
+
+                                        <button type="button"
+                                            class="btn btn-sm btn-dark p-0 d-flex align-items-center justify-content-center scroll-btn-left"
+                                            style="width: 20px; height: 20px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                            <i class="fas fa-chevron-left" style="font-size: 0.6rem;"></i>
+                                        </button>
+
+                                        <div class="d-flex align-items-center gap-2 scroll-area"
+                                            style="overflow-x: hidden; white-space: nowrap; scroll-behavior: smooth; flex-grow: 1;">
+
+                                            {% for ip in port.ips %}
+                                            {% set type_text = 'WAN' %}
+                                            {% set type_icon = 'fa-globe' %}
+                                            {% set theme = 'danger' %}
+
+                                            {% if ip.startswith('127.') or ip == '::1' %}
+                                            {% set type_text = 'LCK' %}
+                                            {% set type_icon = 'fa-lock' %}
+                                            {% set theme = 'success' %}
+                                            {% elif ip.startswith('192.168.') or ip.startswith('10.') %}
+                                            {% set type_text = 'LAN' %}
+                                            {% set type_icon = 'fa-network-wired' %}
+                                            {% set theme = 'info' %}
+                                            {% elif ip == '0.0.0.0' or ip == '::' %}
+                                            {% set type_text = 'ANY' %}
+                                            {% set type_icon = 'fa-arrows-to-circle' %}
+                                            {% set theme = 'warning' %}
+                                            {% endif %}
+
+                                            <div class="d-flex align-items-center rounded px-2 py-1 flex-shrink-0"
+                                                style="background: rgba(var(--bs-{{ theme }}-rgb), 0.15); border: 1px solid rgba(var(--bs-{{ theme }}-rgb), 0.3);">
+                                                <i class="fas {{ type_icon }} text-{{ theme }} me-2"
+                                                    style="font-size: 0.7rem;"></i>
+                                                <span class="font-monospace fw-bold text-{{ theme }}"
+                                                    style="font-size: 0.7rem;">{{ type_text }}</span>
+                                                <div class="mx-2"
+                                                    style="width: 1px; height: 12px; background: rgba(255,255,255,0.2);">
+                                                </div>
+                                                <span class="font-monospace text-muted fw-bold"
+                                                    style="font-size: 0.7rem; color: #cbd5e1 !important;">{{ ip
+                                                    }}</span>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+
+                                        <button type="button"
+                                            class="btn btn-sm btn-dark p-0 d-flex align-items-center justify-content-center scroll-btn-right"
+                                            style="width: 20px; height: 20px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.1); color: #94a3b8;">
+                                            <i class="fas fa-chevron-right" style="font-size: 0.6rem;"></i>
+                                        </button>
+
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div class="d-flex align-items-center flex-shrink-0">
-                            <span class="text-success fw-bold me-1"
-                                style="font-size: 0.75rem; letter-spacing: 0.5px; white-space: nowrap;">LISTEN</span>
-                            <span class="port-dot dot-green"></span>
-                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
+                    {% else %}
+                    <div
+                        class="d-flex flex-column align-items-center justify-content-center py-5 text-muted opacity-50">
+                        <i class="fas fa-shield-alt mb-2" style="font-size: 1.5rem;"></i>
+                        <span class="small">No open ports detected</span>
+                    </div>
+                    {% endif %}
                 </div>
-                {% else %}
-                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted"
-                    style="min-height: 180px;">
-                    <i class="fas fa-shield-alt fa-2x mb-2 opacity-25"></i>
-                    <span class="small">No open ports found.</span>
-                </div>
-                {% endif %}
+
+                <script>
+                    document.addEventListener("DOMContentLoaded", function () {
+                        document.querySelectorAll('.scroll-btn-left').forEach(btn => {
+                            btn.addEventListener('click', function () {
+                                const container = this.nextElementSibling;
+                                container.scrollLeft -= 150;
+                            });
+                        });
+
+                        document.querySelectorAll('.scroll-btn-right').forEach(btn => {
+                            btn.addEventListener('click', function () {
+                                const container = this.previousElementSibling;
+                                container.scrollLeft += 150;
+                            });
+                        });
+                    });
+                </script>
+
+                <style>
+                    @keyframes blink {
+                        0% {
+                            opacity: 1;
+                            transform: scale(1);
+                        }
+
+                        50% {
+                            opacity: 0.4;
+                            transform: scale(0.9);
+                        }
+
+                        100% {
+                            opacity: 1;
+                            transform: scale(1);
+                        }
+                    }
+                </style>
             </div>
         </div>
     </div>
@@ -445,14 +918,12 @@
         <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content"
                 style="background-color: #0d1117; border: 1px solid #30363d; box-shadow: 0 0 50px rgba(0,0,0,0.9); border-radius: 8px;">
-
                 <div class="modal-header py-3" style="border-bottom: 1px solid #21262d; background-color: #161b22;">
                     <div class="d-flex align-items-center w-100">
                         <div class="me-3 d-flex align-items-center justify-content-center"
                             style="width: 36px; height: 36px; background: rgba(56, 189, 248, 0.1); border-radius: 8px; border: 1px solid rgba(56, 189, 248, 0.3);">
                             <i class="fas fa-terminal" style="color: #38bdf8; font-size: 1.1rem;"></i>
                         </div>
-
                         <div>
                             <h5 class="modal-title fs-5 fw-bold text-white mb-0"
                                 style="font-family: 'Segoe UI', sans-serif; letter-spacing: 0.5px;">
@@ -463,13 +934,11 @@
                         </div>
                     </div>
                 </div>
-
                 <div class="modal-body p-0" style="background-color: #0d1117;">
                     <div id="diffContent" class="p-4"
                         style="font-family: 'Consolas', 'Monaco', 'Courier New', monospace; font-size: 0.9rem; line-height: 1.5; color: #c9d1d9;">
                     </div>
                 </div>
-
                 <div class="modal-footer py-2 px-3" style="border-top: 1px solid #21262d; background-color: #161b22;">
 
                     <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Close
@@ -478,8 +947,6 @@
             </div>
         </div>
     </div>
-
-    <!-- RESOLUTION MODAL -->
     <div class="modal fade" id="resolveModal" tabindex="-1" aria-hidden="true" style="z-index: 1070;">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content"
@@ -494,14 +961,16 @@
 
                 <div class="modal-body">
                     <p class="text-secondary small mb-3">
-                        Bu alarmı kapatmak ve risk skorunu düşürmek üzeresiniz. Lütfen yapılan işlemi kısaca belirtin.
+                        Bu alarmı kapatmak ve risk skorunu düşürmek üzeresiniz. Lütfen yapılan işlemi kısaca
+                        belirtin.
                     </p>
 
                     <form id="resolveForm">
                         <input type="hidden" id="resolveAlertId">
 
                         <div class="mb-3">
-                            <label class="form-label text-white small fw-bold">Action Taken / Resolution Note</label>
+                            <label class="form-label text-white small fw-bold">Action Taken / Resolution
+                                Note</label>
                             <textarea class="form-control" id="resolveNote" rows="3"
                                 style="background-color: #1e293b; border: 1px solid #334155; color: #e2e8f0;"
                                 placeholder="Örn: False positive, IP firewall'dan engellendi, Kullanıcı şifresi sıfırlandı..."></textarea>
@@ -529,7 +998,6 @@
     </div>
 
     <script>
-        // Hazır butonlara basınca textarea'yı doldurur
         function presetNote(text) {
             document.getElementById('resolveNote').value = text;
         }
@@ -543,7 +1011,7 @@
         volumeData: { { analytics.volume_data | tojson | safe } },
         heatmapData: { { analytics.heatmap_data | tojson | safe } },
         firewallStats: { { analytics.firewall_stats | tojson | safe } }
-            };
+        };
     </script>
 
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
