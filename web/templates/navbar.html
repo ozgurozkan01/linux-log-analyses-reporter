@@ -1,0 +1,365 @@
+<style>
+    /* ... (Mevcut stilleriniz aynı kalıyor) ... */
+    .nav-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 34px;
+        padding: 0 16px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        border-radius: 8px;
+        border: 1px solid transparent;
+        text-decoration: none;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        letter-spacing: 0.3px;
+    }
+
+    .btn-logs {
+        background-color: rgba(6, 182, 212, 0.08);
+        border-color: rgba(6, 182, 212, 0.2);
+        color: #22d3ee;
+    }
+
+    .btn-logs:hover {
+        background-color: rgba(6, 182, 212, 0.15);
+        border-color: #06b6d4;
+        color: #cffafe;
+        box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+        transform: translateY(-1px);
+    }
+
+    .btn-resolution {
+        background-color: rgba(6, 182, 212, 0.08);
+        border-color: rgba(6, 182, 212, 0.2);
+        color: #22d3ee;
+    }
+
+    .btn-resolution:hover {
+        background-color: rgba(6, 182, 212, 0.15);
+        border-color: #06b6d4;
+        color: #cffafe;
+        box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+        transform: translateY(-1px);
+    }
+
+    .btn-firewall-stream {
+        background-color: rgba(6, 182, 212, 0.08);
+        border-color: rgba(6, 182, 212, 0.2);
+        color: #22d3ee;
+    }
+
+    .btn-firewall-stream:hover {
+        background-color: rgba(6, 182, 212, 0.15);
+        border-color: #06b6d4;
+        color: #cffafe;
+        box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+        transform: translateY(-1px);
+    }
+
+    .nav-action-btn i {
+        margin-right: 8px;
+        font-size: 0.9rem;
+    }
+
+    .btn-network {
+        background-color: rgba(6, 182, 212, 0.08);
+        border-color: rgba(6, 182, 212, 0.2);
+        color: #22d3ee;
+    }
+
+    .btn-network:hover,
+    .btn-network.show {
+        background-color: rgba(6, 182, 212, 0.15);
+        border-color: #06b6d4;
+        color: #cffafe;
+        box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+        transform: translateY(-1px);
+    }
+
+    .network-dropdown {
+        background: rgba(15, 23, 42, 0.95) !important;
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.8);
+        min-width: 260px;
+        padding: 0;
+        margin-top: 12px !important;
+        border-radius: 12px;
+        overflow: hidden;
+        animation: fadeInDrop 0.2s ease-out;
+    }
+
+    @keyframes fadeInDrop {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .net-item {
+        padding: 10px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .net-item:last-child {
+        border-bottom: none;
+    }
+
+    .net-label {
+        font-size: 0.65rem;
+        text-transform: uppercase;
+        color: #94a3b8;
+        /* Gri Etiket */
+        letter-spacing: 0.5px;
+        font-weight: 700;
+        display: block;
+        margin-bottom: 2px;
+    }
+
+    .net-value {
+        font-family: 'Courier New', monospace;
+        color: #e2e8f0;
+        font-size: 0.85rem;
+        font-weight: bold;
+        letter-spacing: -0.5px;
+    }
+
+    /* Ülke kodu stili */
+    .country-code {
+        position: absolute;
+        right: 37%;
+        top: 21%;
+        transform: translateY(-50%);
+        color: #94a3b8;
+        font-weight: normal;
+        font-size: 0.85em;
+    }
+
+    .net-controls {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .control-btn,
+    .copy-btn {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        color: #94a3b8;
+        padding: 5px;
+        font-size: 0.8rem;
+        transition: all 0.2s;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+    }
+
+    .control-btn:hover,
+    .copy-btn:hover {
+        background: rgba(56, 189, 248, 0.1);
+        color: #38bdf8;
+        border-color: rgba(56, 189, 248, 0.5);
+    }
+</style>
+
+<nav class="navbar fixed-top navbar-expand-lg border-bottom py-2" style="background-color: var(--bs-body-bg);">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand d-flex align-items-center" href="/">
+            <img src="{{ url_for('static', filename='img/d.png') }}" alt="Sentryd Logo" class="me-2"
+                style="height: 45px; width: auto; object-fit: contain;">
+
+            <span class="fw-bold" style="font-size: 1.3rem; color: #ffffff; letter-spacing: -0.5px;">Sentry</span>
+
+            <div class="d-flex align-items-center justify-content-center ms-0 ps-1 pe-2 rounded-end" style="background: linear-gradient(90deg, transparent 0%, rgba(255, 72, 0, 0.15) 100%); 
+                border-bottom: 2px solid #ff4800; height: 28px;">
+                <span
+                    style="color: #ff4800; font-weight: bold; font-family: 'Courier New', monospace; font-size: 1.3rem;">d</span>
+            </div>
+
+            <span class="badge border border-primary border-opacity-25 text-primary ms-3"
+                style="background: rgba(13, 110, 253, 0.05); font-size: 0.8rem;">
+                Your Daemon Sight
+            </span>
+        </a>
+
+        <div class="d-flex align-items-center ms-auto gap-3">
+
+            <div class="d-none d-lg-block text-end border-end pe-3 me-2">
+                <div class="fw-bold text-body small mb-1">
+                    Welcome, {{ data.sys_info.hostname }}
+                </div>
+
+                <div class="text-muted d-flex align-items-center justify-content-end gap-2" style="font-size: 0.7rem;">
+
+                    <span class="d-flex align-items-center" title="Operating System">
+                        <i class="fab fa-linux me-2" style="font-size: 1.1rem; 
+                            background: linear-gradient(135deg, #f0730d 0%, #c9fd0d 100%); 
+                            -webkit-background-clip: text; 
+                            -webkit-text-fill-color: transparent; 
+                            filter: drop-shadow(0 0 6px rgba(13, 202, 240, 1));">
+                        </i> <span class="text-truncate" style="max-width: 350px;">{{ data.sys_info.os }}</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="d-none d-xl-inline-flex align-items-center small border px-3 py-1 rounded-pill bg-body-secondary text-body shadow-sm position-relative">
+                
+                {% if data.collector_status %}
+                <img src="{{ url_for('static', filename='img/daemon-sight.png') }}" alt="Daemon Active"
+                    style="position: absolute; top: -18px; right: 175px; height: 20px; width: auto; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3)); z-index: 10;">
+                {% else %}
+                <img src="{{ url_for('static', filename='img/daemon-sleep.png') }}" alt="Daemon Sleep"
+                    style="position: absolute; top: -20px; right: 175px; height: 30px; width: auto; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3)); opacity: 0.7; z-index: 10;">
+                {% endif %}
+
+                <div class="d-flex align-items-center me-2">
+                    {% if data.collector_status %}
+                    <span class="status-dot active"></span>
+                    <span class="fw-bold" style="font-size: 0.75rem; color: #28a745;">Daemon Active</span>
+                    {% else %}
+                    <span class="status-dot inactive"></span>
+                    <span class="fw-bold" style="font-size: 0.75rem; color: #dc3545;">Daemon Deactive</span>
+                    {% endif %}
+                </div>
+                <div class="d-flex align-items-center border-start ps-2 me-2 text-muted" title="System Uptime">
+                    <i class="fas fa-clock me-1"></i>
+                    <span id="live-uptime">{{ data.sys_info.uptime }}</span>
+                </div>
+            </div>
+
+            <a href="/logs" class="nav-action-btn btn-logs">
+                <i class="fas fa-terminal"></i> Log Explorer
+            </a>
+            <a href="/resolution" class="nav-action-btn btn-resolution">
+                <i class="fas fa-check-double"></i> Resolution Log
+            </a>
+            <a href="/fwstream" class="nav-action-btn btn-firewall-stream">
+                <i class="fas fa-fire"></i>
+                Firewall Stream
+            </a>
+            <div class="dropdown">
+                <button id="network-dropdown-button" class="nav-action-btn btn-network dropdown-toggle" type="button"
+                    data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-network-wired me-2"></i>Network
+                </button>
+
+                <div class="dropdown-menu dropdown-menu-end network-dropdown">
+                    <div class="net-item">
+
+                        <div>
+                            <span class="net-label">
+                                <i class="fas fa-globe me-1"></i> Public IP
+                            </span>
+
+                            <span class="net-value" id="public-ip-txt" data-full-ip="{{ data.net_info.public_ip }}">
+                                <span id="ip-value-text">{{ data.net_info.public_ip.split('.')[0] }}.xxx.xxx.xxx</span>
+
+                                {% if data.net_info.country_code %}
+                                <span class="country-code">
+                                    ({{ data.net_info.country_code }})
+                                </span>
+                                {% endif %}
+                            </span>
+                        </div>
+
+                        <div class="net-controls">
+                            <button class="control-btn" onclick="toggleIpVisibility(event)" title="Show/Hide IP">
+                                <i id="toggle-ip-icon" class="fas fa-eye-slash"></i>
+                            </button>
+                            <button class="copy-btn" onclick="copyToClipboard('public-ip-txt', event)" title="Copy">
+                                <i class="far fa-copy"></i>
+                            </button>
+                        </div>
+
+                    </div>
+                    <div class="net-item">
+                        <div>
+                            <span class="net-label"><i class="fas fa-laptop-house me-1"></i> Local IP</span>
+                            <span class="net-value" id="local-ip-txt">{{ data.net_info.local_ip }}</span>
+                        </div>
+                        <button class="copy-btn" onclick="copyToClipboard('local-ip-txt', event)" title="Copy">
+                            <i class="far fa-copy"></i>
+                        </button>
+                    </div>
+
+                    <div class="net-item" style="background: rgba(168, 85, 247, 0.03);">
+                        <div>
+                            <span class="net-label"><i class="fas fa-server me-1"></i> DNS Servers</span>
+                            <span class="net-value" style="font-size: 0.75rem;">{{ data.net_info.dns }}</span>
+                        </div>
+                    </div>
+
+                    <div class="px-3 py-2 bg-black bg-opacity-25 d-flex justify-content-between align-items-center">
+                        <span style="font-size: 0.6rem; color: #64748b; font-weight: 600;">STATUS</span>
+                        {% if data.net_info.public_ip != "Offline" %}
+                        <span
+                            class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-20"
+                            style="font-size: 0.55rem;">ONLINE</span>
+                        {% else %}
+                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-20"
+                            style="font-size: 0.55rem;">OFFLINE</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+</nav>
+
+<script>
+    function toggleIpVisibility(event) {
+        event.stopPropagation();
+        const ipValueSpan = document.getElementById('ip-value-text');
+        const ipContainerSpan = document.getElementById('public-ip-txt');
+        const ipIcon = document.getElementById('toggle-ip-icon');
+        const fullIp = ipContainerSpan.getAttribute('data-full-ip');
+
+        if (ipIcon.classList.contains('fa-eye-slash')) {
+            ipValueSpan.textContent = fullIp;
+            ipIcon.classList.remove('fa-eye-slash');
+            ipIcon.classList.add('fa-eye');
+        } else {
+            const maskedIp = fullIp.split('.')[0] + '.xxx.xxx.xxx';
+            ipValueSpan.textContent = maskedIp;
+            ipIcon.classList.remove('fa-eye');
+            ipIcon.classList.add('fa-eye-slash');
+        }
+    }
+
+    function copyToClipboard(elementId, event) {
+        event.stopPropagation();
+        const textToCopy = document.getElementById(elementId).getAttribute('data-full-ip');
+        navigator.clipboard.writeText(textToCopy).catch(err => {
+            console.error('Kopyalama başarısız: ', err);
+        });
+    }
+
+    var networkDropdown = document.getElementById('network-dropdown-button');
+
+    networkDropdown.addEventListener('shown.bs.dropdown', function () {
+        const ipValueSpan = document.getElementById('ip-value-text');
+        const ipContainerSpan = document.getElementById('public-ip-txt');
+        const ipIcon = document.getElementById('toggle-ip-icon');
+
+        if (ipValueSpan && ipIcon) {
+            const fullIp = ipContainerSpan.getAttribute('data-full-ip');
+            const maskedIp = fullIp.split('.')[0] + '.xxx.xxx.xxx';
+            ipValueSpan.textContent = maskedIp;
+            ipIcon.classList.remove('fa-eye');
+            ipIcon.classList.add('fa-eye-slash');
+        }
+    });
+</script>
