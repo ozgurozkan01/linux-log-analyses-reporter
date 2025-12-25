@@ -13,8 +13,6 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 from config import Config
-import utils
-
 
 def analyze_audit_logs():
     events = []

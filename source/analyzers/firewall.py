@@ -12,11 +12,11 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 from config import Config
-import utils
+from services import core_utils
 import db
 
 def analyze_firewall_logs():
-    since_time = utils.get_since_timestamp()
+    since_time = core_utils.get_since_timestamp()
     
     cmd = Config.CMD_FIREWALL_TEMPLATE.format(since_time)
     
@@ -160,7 +160,7 @@ def analyze_firewall_logs():
             else:
                 desc = f"High Traffic Dropped ({hit_count} packets)"
         
-        elif dst_port in critical_ports and is_blocked:
+        elif dst_port in critical_ports and action == "BLOCK":
             severity = "WARNING"
             event_type = "CRITICAL_PORT"
             desc = f"Blocked Access to Critical Port {dst_port}/{protocol}"

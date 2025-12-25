@@ -11,8 +11,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 from config import Config
-import utils
-import common_libs
+from services import core_utils
 
 def analyze_ssh_logs():
     failed_count = 0
@@ -22,7 +21,7 @@ def analyze_ssh_logs():
     BRUTE_FORCE_WINDOW = Config.SSH_BRUTE_FORCE_WINDOW
     BRUTE_FORCE_THRESHOLD = Config.SSH_BRUTE_FORCE_THRESHOLD
 
-    since_time = utils.get_since_timestamp()
+    since_time = core_utils.get_since_timestamp()
     
     cmd = Config.CMD_SSH_BASE + ["--since", since_time]
     

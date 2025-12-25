@@ -13,7 +13,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 from config import Config
-import utils
+from services.forensics import find_renamed_file
 import db
 
 def analyze_file_integrity():
@@ -35,7 +35,7 @@ def analyze_file_integrity():
             
             if stored_data:
                 old_inode = stored_data['inode']
-                new_path = utils.find_renamed_file(old_inode) 
+                new_path = forensics.find_renamed_file(old_inode) 
                 
                 if new_path:
                     old_dir, old_name = os.path.split(filepath)

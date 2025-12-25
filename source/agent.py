@@ -1,26 +1,30 @@
 # agent.py
 
 import shlex
-import utils
 import risk_engine
 import db 
-from common_libs import *
+import concurrent.futures
 from config import Config
 
-from analyzers.ssh import analyze_ssh_logs
-from analyzers.sudo import analyze_sudo_logs
+# Services
+from services.system_monitor import collect_performance, collect_system_status
+from services.core_utils     import is_root, update_cursor
+
+# Analyzers
+from analyzers.ssh      import analyze_ssh_logs
+from analyzers.sudo     import analyze_sudo_logs
 from analyzers.firewall import analyze_firewall_logs
-from analyzers.audit import analyze_audit_logs
-from analyzers.fim import analyze_file_integrity
+from analyzers.audit    import analyze_audit_logs
+from analyzers.fim      import analyze_file_integrity
 
 def run():
-    utils.is_root()
+    is_root()
     print("\n--- MiniSIEM Collector Starting... ---\n")
 
     db.init_db()
-    utils.collect_system_status()
+    collect_system_status()
     
-    cpu, ram, disk, ports, port_details = utils.collect_performance()
+    cpu, ram, disk, ports, port_details = collect_performance()
 
     failed_logins = 0
     ssh_events = []
@@ -165,7 +169,7 @@ def run():
                 print(f"[WARNING] Notification error: {e}")
 
     db.maintenance(retention_days=7)
-    utils.update_cursor()
+    update_cursor()
     print("\n--- Process Complete ---")
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ parent_dir = os.path.dirname(current_dir)
 sys.path.append(parent_dir)
 
 from config import Config
-import utils
+from services import core_utils
 
 def analyze_sudo_logs():
     events = []
@@ -33,7 +33,7 @@ def analyze_sudo_logs():
     editor_bins = getattr(Config, 'SUDO_EDITORS', Config.SUDO_EDITOR_BINS)
     destructive_bins = getattr(Config, 'SUDO_DESTRUCTIVE_BINS', Config.SUDO_DESTRUCTIVE_BINS)
 
-    since_time = utils.get_since_timestamp()
+    since_time = core_utils.get_since_timestamp()
     cmd = Config.CMD_SUDO_BASE + ["--since", since_time]
     
     print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] START --- analyze_sudo_logs ---")
