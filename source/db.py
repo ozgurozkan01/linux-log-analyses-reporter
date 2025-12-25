@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timedelta
 from typing import Final, List, Dict, Any, Optional
 from contextlib import contextmanager
+import ipaddress
 
 try:
     from config import Config
@@ -289,7 +290,7 @@ def get_firewall_stats():
 
 def get_latest_firewall_logs(limit=50):
     return db.query_all(
-        "SELECT * FROM firewall_logs ORDER BY id DESC LIMIT ?", 
+        "SELECT * FROM firewall_logs WHERE src_ip != '127.0.0.1' ORDER BY id DESC LIMIT ?", 
         (limit,)
     )
 
